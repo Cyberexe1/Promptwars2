@@ -104,24 +104,67 @@ SmogWise uses a hybrid approach so that safety does not depend only on a languag
 - Sensitive data is not written to application logs.
 - Stored profiles can be viewed and deleted by the user.
 
+## Current Status
+
+**Phase 1 is complete.** The application runs end to end locally: live air-quality data, deterministic risk assessment, a personalised plan, and 160 passing tests. Phase 2 (AWS deployment) and Phase 3 (polish and submission) are outstanding.
+
+| Area | State |
+|---|---|
+| React frontend | Built, 47 tests passing |
+| Node.js API | Built, 113 tests passing |
+| Live air-quality data | Working against Open-Meteo, no API key required |
+| Risk and recommendation rules | Complete, verified over 1,000+ household and band combinations |
+| Amazon Bedrock | Integrated with schema validation and a safe fallback; disabled until a model id is configured |
+| Amazon DynamoDB | Schema designed, not yet implemented. Phase 3 feature (saved plans) |
+| AWS deployment | Not started. Phase 2 |
+
+## Running It Locally
+
+Requires Node.js 22 or later. No AWS account or API key is needed for the core experience.
+
+```bash
+# Terminal 1: the API
+cd backend
+npm install
+npm run dev            # http://localhost:3000
+
+# Terminal 2: the web app
+cd frontend
+npm install
+npm run dev            # http://localhost:5173
+```
+
+Open http://localhost:5173, search for a city, and generate a plan.
+
+To enable Bedrock personalisation, copy `backend/.env.example` to `backend/.env`, set `BEDROCK_MODEL_ID` and `AWS_REGION`, and make AWS credentials available through the standard provider chain. Without it the service runs on the deterministic rules engine and reports `generatedBy: "rules"`.
+
+### Checks
+
+```bash
+cd backend  && npm run typecheck && npm test
+cd frontend && npm run lint && npm run typecheck && npm test && npm run build
+```
+
 ## Technology Stack
 
 | Layer | Technology | Purpose |
 |---|---|---|
-| Frontend | React, TypeScript, Vite | Accessible responsive web application |
-| Styling | CSS Modules or Tailwind CSS | Consistent responsive UI |
-| Backend | Node.js, TypeScript, Express | API, validation, recommendation orchestration |
+| Frontend | React 19, TypeScript, Vite | Accessible responsive web application |
+| Styling | Hand-written CSS with custom properties | Full control over contrast and forced-colours support, no framework weight |
+| Backend | Node.js 22, TypeScript, Express 5 | API, validation, recommendation orchestration |
 | Validation | Zod | Request and model-output schema validation |
-| GenAI | Amazon Bedrock | Personalized explanations and routines |
-| Database | Amazon DynamoDB | User preferences, saved plans, and cached summaries |
-| Air-quality data | Trusted third-party AQI API | Current pollutant readings and forecasts |
+| GenAI | Amazon Bedrock (Converse API) | Rewords reviewed recommendations for the household |
+| Database | Amazon DynamoDB | User preferences, saved plans, and cached summaries (Phase 3) |
+| Air-quality data | [Open-Meteo](https://open-meteo.com/) Air Quality and Geocoding APIs | Current pollutant readings and city search, no API key required |
 | Frontend hosting | Amazon S3 | Stores the production React build |
 | Content delivery | Amazon CloudFront | Delivers the frontend over HTTPS and caches static assets |
 | Backend hosting | AWS App Runner | Runs and scales the Node.js API |
 | Container registry | Amazon ECR | Stores the backend container image for App Runner |
 | Monitoring | Amazon CloudWatch | Application logs, metrics, dashboards, and alarms |
-| Testing | Vitest, React Testing Library, Supertest | Unit, component, and API tests |
+| Testing | Vitest, React Testing Library, Supertest, axe-core | Unit, component, API, and accessibility tests |
 | CI/CD | GitHub Actions | Linting, tests, builds, and deployments |
+
+Air-quality provider note: Open-Meteo was chosen because it serves both geocoding and current air quality without an API key, which removes a credential from the deployment entirely. Risk bands are computed from the US EPA Air Quality Index rather than taken on trust, and the European index is displayed alongside it with an explicit note that the two scales are not interchangeable.
 
 ## AWS Architecture
 
@@ -196,15 +239,16 @@ Use a single table with partition and sort keys where practical.
 
 ## API Outline
 
-| Method | Endpoint | Purpose |
-|---|---|---|
-| `GET` | `/health` | App Runner health check |
-| `GET` | `/api/air-quality` | Return normalized AQI and source metadata |
-| `POST` | `/api/recommendations` | Generate a personalized, validated daily plan |
-| `GET` | `/api/plans` | List a signed-in user's saved plans |
-| `DELETE` | `/api/plans/:id` | Delete a saved plan |
+| Method | Endpoint | Purpose | Status |
+|---|---|---|---|
+| `GET` | `/health` | App Runner health check | Built |
+| `GET` | `/api/locations` | City search by name | Built |
+| `GET` | `/api/air-quality` | Return normalized AQI and source metadata | Built |
+| `POST` | `/api/recommendations` | Generate a personalized, validated daily plan | Built |
+| `GET` | `/api/plans` | List a signed-in user's saved plans | Phase 3 |
+| `DELETE` | `/api/plans/:id` | Delete a saved plan | Phase 3 |
 
-All write endpoints should validate input, limit payload size, enforce rate limits, and require authentication when user accounts are enabled.
+All write endpoints validate input, limit payload size, and enforce rate limits. The saved-plan endpoints will additionally require authentication. See [`backend/README.md`](backend/README.md) for request and response shapes.
 
 ## Security Measures
 
@@ -258,49 +302,56 @@ All write endpoints should validate input, limit payload size, enforce rate limi
 
 ## Three-Phase Implementation Plan
 
-### Phase 1: Product Foundation and Local MVP
+### Phase 1: Product Foundation and Local MVP — complete
 
 **Goal:** Build a complete local user journey before deploying it to AWS.
 
 #### Planning and design
 
-- [ ] Finalize the target users, supported locations, and AQI standard.
-- [ ] Select an air-quality data provider and confirm its usage and caching terms.
-- [ ] Define the recommendation catalogue, risk bands, safety rules, and impact factors.
-- [ ] Create accessible wireframes for mobile and desktop layouts.
-- [ ] Define API contracts and structured GenAI response schemas.
+- [x] Finalize the target users, supported locations, and AQI standard. US EPA AQI, with PM2.5 breakpoints per the May 2024 revision.
+- [x] Select an air-quality data provider and confirm its usage terms. Open-Meteo, free and keyless.
+- [x] Define the recommendation catalogue, risk bands, safety rules, and impact factors. 20 reviewed entries in `backend/src/domain/catalogue.ts`.
+- [x] Define API contracts and structured GenAI response schemas.
+- [ ] Create accessible wireframes for mobile and desktop layouts. Skipped: built the responsive layout directly and verified it with accessibility tests.
 
 #### Frontend
 
-- [ ] Create the React, TypeScript, and Vite application.
-- [ ] Build location permission and manual city-selection flows.
-- [ ] Build the lifestyle and household-preferences form.
-- [ ] Display AQI, pollutants, data source, update time, and stale-data warnings.
-- [ ] Build recommendation cards showing action, reason, impact, cost, effort, and confidence.
-- [ ] Add loading, empty, offline, validation, and error states.
-- [ ] Implement semantic HTML, keyboard support, visible focus, and non-color AQI labels.
+- [x] Create the React, TypeScript, and Vite application.
+- [x] Build location permission and manual city-selection flows.
+- [x] Build the lifestyle and household-preferences form.
+- [x] Display AQI, pollutants, data source, update time, and stale-data warnings.
+- [x] Build recommendation cards showing action, reason, impact, cost, effort, and confidence.
+- [x] Add loading, empty, offline, validation, and error states.
+- [x] Implement semantic HTML, keyboard support, visible focus, and non-color AQI labels.
 
 #### Backend and GenAI
 
-- [ ] Create the Node.js, TypeScript, and Express API.
-- [ ] Implement `/health`, `/api/air-quality`, and `/api/recommendations`.
-- [ ] Validate requests and responses with Zod.
-- [ ] Normalize external air-quality data without asking the model to invent live values.
-- [ ] Implement deterministic AQI risk and sensitive-group safety rules.
-- [ ] Integrate Amazon Bedrock for personalized plans and explanations.
-- [ ] Validate Bedrock's structured output and provide a safe fallback response.
-- [ ] Add timeouts, limited retries, payload limits, and safe error handling.
+- [x] Create the Node.js, TypeScript, and Express API.
+- [x] Implement `/health`, `/api/locations`, `/api/air-quality`, and `/api/recommendations`.
+- [x] Validate requests and responses with Zod.
+- [x] Normalize external air-quality data without asking the model to invent live values.
+- [x] Implement deterministic AQI risk and sensitive-group safety rules.
+- [x] Integrate Amazon Bedrock for personalized plans and explanations.
+- [x] Validate Bedrock's structured output and provide a safe fallback response.
+- [x] Add timeouts, payload limits, rate limiting, and safe error handling.
 
 #### Data and initial testing
 
-- [ ] Define DynamoDB keys, indexes, retention rules, and TTL fields.
-- [ ] Keep secrets in local environment variables that are excluded from Git.
-- [ ] Write unit tests for AQI normalization, risk bands, safety rules, and validation.
-- [ ] Write component tests for forms, AQI displays, recommendations, and errors.
-- [ ] Write API tests for valid requests, invalid input, unavailable data, and model failures.
-- [ ] Add linting, formatting, type checking, and test scripts.
+- [x] Define DynamoDB keys, indexes, retention rules, and TTL fields. Designed below; implementation lands with saved plans in Phase 3.
+- [x] Keep secrets in local environment variables that are excluded from Git.
+- [x] Write unit tests for AQI normalization, risk bands, safety rules, and validation.
+- [x] Write component tests for forms, AQI displays, recommendations, and errors.
+- [x] Write API tests for valid requests, invalid input, unavailable data, and model failures.
+- [x] Add linting, type checking, and test scripts.
 
-**Phase 1 deliverable:** A tested local MVP that turns real or safely mocked AQI data and user preferences into a validated daily clean-air plan.
+**Phase 1 deliverable: met.** A tested local MVP that turns live air-quality data and household preferences into a validated daily clean-air plan. 160 tests pass, lint and type checks are clean, and both projects build.
+
+Verified against live data during development: Delhi at US AQI 183 (PM2.5 69.6 µg/m³) returned the "Unhealthy" band, and a household with a child and a declared sensitivity was correctly escalated to "Very unhealthy" precautions, producing a plan to pause outdoor exercise, replace biomass cooking, watch for symptoms, keep windows closed, wear a fitted respirator, and take low-traffic routes.
+
+Two things deliberately deferred rather than half-built:
+
+- **DynamoDB** is designed but unused, because nothing in the Phase 1 journey needs persistence. It arrives with saved plans in Phase 3.
+- **Authentication** is absent for the same reason. The app is useful anonymously, so Cognito is only justified once private saved data exists.
 
 ### Phase 2: AWS Infrastructure, Deployment, and Security
 
@@ -389,14 +440,29 @@ All write endpoints should validate input, limit payload size, enforce rate limi
 
 ```text
 .
-├── frontend/             # React application
-├── backend/              # Node.js API
-├── infrastructure/       # Infrastructure-as-code templates
-├── docs/                 # Architecture and supporting documentation
-├── .github/workflows/    # CI/CD workflows
+├── backend/                  # Node.js API
+│   ├── src/
+│   │   ├── domain/           # AQI bands, risk rules, recommendation catalogue
+│   │   ├── services/         # Upstream calls, Bedrock, plan assembly
+│   │   ├── routes/           # HTTP endpoints
+│   │   ├── middleware/       # Error handling
+│   │   ├── utils/            # Errors and logging
+│   │   ├── app.ts            # Express app, exported for tests
+│   │   └── server.ts         # Listener and shutdown
+│   ├── tests/                # 113 Vitest tests
+│   └── .env.example
+├── frontend/                 # React application
+│   ├── src/
+│   │   ├── components/       # Location, air quality, form, plan
+│   │   ├── test/             # Fetch stub and fixtures
+│   │   ├── api.ts            # API client
+│   │   └── types.ts          # Contract types
+│   └── src/*.test.tsx        # 47 Vitest tests
 ├── README.md
-└── LICENSE
+└── .gitignore
 ```
+
+Planned for Phase 2: `infrastructure/` for infrastructure-as-code and `.github/workflows/` for CI/CD.
 
 ## Submission Checklist
 

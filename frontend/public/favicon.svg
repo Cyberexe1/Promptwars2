@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="SmogWise">
+  <rect width="64" height="64" rx="12" fill="#0f5c73" />
+  <path d="M14 40h36" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.45" />
+  <path d="M18 48h28" stroke="#ffffff" stroke-width="5" stroke-linecap="round" opacity="0.25" />
+  <circle cx="32" cy="24" r="10" fill="#ffffff" />
+</svg>

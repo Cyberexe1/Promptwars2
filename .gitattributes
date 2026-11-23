@@ -1,0 +1,5 @@
+# Normalise line endings so the repository is identical on every platform.
+* text=auto eol=lf
+
+# Treat lockfiles as generated in diffs and language statistics.
+package-lock.json linguist-generated=true -diff
