@@ -16,6 +16,13 @@ import { stubApi } from './test/server';
  * Known gap: axe's colour-contrast rule needs a canvas, which jsdom does not
  * implement, so contrast is not verified here.
  */
+
+/** The dashboard is behind a session, so these renders need one. */
+function renderDashboard() {
+  stubApi({ signedIn: true });
+  return renderWithRouter(<App />, '/dashboard');
+}
+
 describe('landing page', () => {
   it('has no detectable violations', async () => {
     stubApi();
@@ -37,19 +44,21 @@ describe('landing page', () => {
 
 describe('dashboard', () => {
   it('has no detectable violations before any input', async () => {
-    stubApi();
-    const { container } = renderWithRouter(<App />, '/dashboard');
+    const { container } = renderDashboard();
+    await screen.findByLabelText(/search for a city/i);
 
     const results = await axe(container);
     expect(results).toHaveNoViolations();
   });
 
   it('has no detectable violations once a plan is shown', async () => {
-    stubApi();
     const user = userEvent.setup();
-    const { container } = renderWithRouter(<App />, '/dashboard');
+    const { container } = renderDashboard();
 
-    await user.type(screen.getByLabelText(/search for a city/i), 'Delhi');
+    await user.type(
+      await screen.findByLabelText(/search for a city/i),
+      'Delhi',
+    );
     await user.click(
       await screen.findByRole('button', { name: /Delhi, Delhi, India/i }),
     );
@@ -61,11 +70,12 @@ describe('dashboard', () => {
     expect(results).toHaveNoViolations();
   });
 
-  it('labels every form control', () => {
-    stubApi();
-    renderWithRouter(<App />, '/dashboard');
+  it('labels every form control', async () => {
+    renderDashboard();
 
-    const form = screen.getByRole('form', { name: /tell us about your household/i });
+    const form = await screen.findByRole('form', {
+      name: /tell us about your household/i,
+    });
 
     for (const control of [
       ...within(form).getAllByRole('checkbox'),
@@ -76,9 +86,9 @@ describe('dashboard', () => {
     }
   });
 
-  it('groups related choices under a legend', () => {
-    stubApi();
-    renderWithRouter(<App />, '/dashboard');
+  it('groups related choices under a legend', async () => {
+    renderDashboard();
+    await screen.findByLabelText(/search for a city/i);
 
     for (const legend of [
       /who lives with you/i,
@@ -90,22 +100,23 @@ describe('dashboard', () => {
     }
   });
 
-  it('exposes progress as text, not position alone', () => {
-    stubApi();
-    renderWithRouter(<App />, '/dashboard');
+  it('exposes progress as text, not position alone', async () => {
+    renderDashboard();
 
-    const progress = screen.getByRole('navigation', { name: /progress/i });
+    const progress = await screen.findByRole('navigation', { name: /progress/i });
 
     expect(within(progress).getByText('Current step')).toBeInTheDocument();
     expect(within(progress).getAllByText('To do')).toHaveLength(2);
   });
 
   it('announces status changes in a live region', async () => {
-    stubApi();
     const user = userEvent.setup();
-    renderWithRouter(<App />, '/dashboard');
+    renderDashboard();
 
-    await user.type(screen.getByLabelText(/search for a city/i), 'Delhi');
+    await user.type(
+      await screen.findByLabelText(/search for a city/i),
+      'Delhi',
+    );
     await user.click(
       await screen.findByRole('button', { name: /Delhi, Delhi, India/i }),
     );
@@ -115,11 +126,10 @@ describe('dashboard', () => {
   });
 
   it('moves focus in document order from the search field', async () => {
-    stubApi();
     const user = userEvent.setup();
-    renderWithRouter(<App />, '/dashboard');
+    renderDashboard();
 
-    const search = screen.getByLabelText(/search for a city/i);
+    const search = await screen.findByLabelText(/search for a city/i);
     search.focus();
     expect(search).toHaveFocus();
 
@@ -130,11 +140,12 @@ describe('dashboard', () => {
   });
 
   it('makes the submit button keyboard reachable once a location is chosen', async () => {
-    stubApi();
     const user = userEvent.setup();
-    renderWithRouter(<App />, '/dashboard');
+    renderDashboard();
 
-    const submit = screen.getByRole('button', { name: /build my clean-air plan/i });
+    const submit = await screen.findByRole('button', {
+      name: /build my clean-air plan/i,
+    });
     // A disabled control is correctly skipped by the keyboard.
     expect(submit).toBeDisabled();
 
@@ -147,6 +158,17 @@ describe('dashboard', () => {
     expect(submit).toBeEnabled();
     submit.focus();
     expect(submit).toHaveFocus();
+  });
+});
+
+describe('login page', () => {
+  it('has no detectable violations', async () => {
+    stubApi();
+    const { container } = renderWithRouter(<App />, '/login');
+    await screen.findByLabelText(/email address/i);
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
   });
 });
 

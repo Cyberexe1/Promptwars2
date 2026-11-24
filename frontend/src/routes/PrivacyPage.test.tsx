@@ -28,10 +28,10 @@ describe('privacy page', () => {
     renderWithRouter(<App />, '/privacy');
 
     for (const claim of [
-      /no accounts, sign-in, or passwords/i,
-      /no analytics/i,
-      /no cookies/i,
+      /no analytics, advertising, or third-party tracking/i,
+      /no tracking cookies/i,
       /no storage of health answers/i,
+      /no storage of your plans/i,
     ]) {
       expect(screen.getByText(claim)).toBeInTheDocument();
     }
@@ -42,6 +42,22 @@ describe('privacy page', () => {
     renderWithRouter(<App />, '/privacy');
 
     expect(screen.getByText(/on your device only/i)).toBeInTheDocument();
+  });
+
+  it('is explicit that the password itself is not stored', () => {
+    stubApi();
+    renderWithRouter(<App />, '/privacy');
+
+    expect(screen.getByText(/scrypt hash/i)).toBeInTheDocument();
+    expect(screen.getByText(/cannot be reversed/i)).toBeInTheDocument();
+  });
+
+  it('describes the session cookie protections', () => {
+    stubApi();
+    renderWithRouter(<App />, '/privacy');
+
+    expect(screen.getByText('HttpOnly')).toBeInTheDocument();
+    expect(screen.getByText('SameSite=Lax')).toBeInTheDocument();
   });
 
   it('names the third-party services it depends on', () => {
@@ -63,10 +79,15 @@ describe('privacy page', () => {
     ).toHaveAttribute('href', expect.stringContaining('github.com'));
   });
 
-  it('makes no network request, since it is static content', () => {
+  it('fetches no data of its own, being static content', () => {
     const fetchMock = stubApi();
     renderWithRouter(<App />, '/privacy');
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    // The shell checks the session on every route; the page itself must not
+    // request anything beyond that.
+    const dataCalls = fetchMock.mock.calls.filter(
+      ([url]) => !String(url).includes('/api/auth/'),
+    );
+    expect(dataCalls).toHaveLength(0);
   });
 });

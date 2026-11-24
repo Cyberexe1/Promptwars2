@@ -11,6 +11,7 @@ import { searchLocations } from '../services/geocoding.js';
 import { getCurrentAirQuality } from '../services/airQuality.js';
 import { createPlan } from '../services/planner.js';
 import { assessRisk } from '../domain/risk.js';
+import { requireAuth } from '../middleware/requireAuth.js';
 import type { AirQualityResponse } from '../types.js';
 
 export const apiRouter = Router();
@@ -60,9 +61,16 @@ apiRouter.get(
   }),
 );
 
-/** Personalised plan for a household. */
+/**
+ * Personalised plan for a household.
+ *
+ * Requires a session. The public endpoints above expose only published
+ * air-quality data, but this one accepts household and health answers, so it
+ * is the one endpoint behind the account boundary.
+ */
 apiRouter.post(
   '/recommendations',
+  requireAuth,
   asyncHandler(async (req, res) => {
     const parsed = recommendationsRequestSchema.safeParse(req.body);
     if (!parsed.success) {

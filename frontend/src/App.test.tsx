@@ -5,7 +5,10 @@ import App from './App';
 import { renderWithRouter } from './test/render';
 import { stubApi } from './test/server';
 
-/** Routing and shell behaviour. Page content is covered per route. */
+/**
+ * Routing and shell behaviour. Page content is covered per route, and
+ * session-dependent navigation is covered in `routes/LoginPage.test.tsx`.
+ */
 describe('routing', () => {
   it('shows the landing page at the root', () => {
     stubApi();
@@ -16,17 +19,39 @@ describe('routing', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows the dashboard at /dashboard', () => {
-    stubApi();
+  it('shows the dashboard at /dashboard for a signed-in visitor', async () => {
+    stubApi({ signedIn: true });
     renderWithRouter(<App />, '/dashboard');
 
     expect(
-      screen.getByRole('heading', { level: 1, name: /clean-air plan/i }),
+      await screen.findByRole('heading', { level: 1, name: /clean-air plan/i }),
     ).toBeInTheDocument();
   });
 
-  it('navigates from the landing call to action to the dashboard', async () => {
+  it('shows the privacy page at /privacy', () => {
     stubApi();
+    renderWithRouter(<App />, '/privacy');
+
+    expect(
+      screen.getByRole('heading', { level: 1, name: /what smogwise does/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('sends a signed-out visitor from the landing call to action to sign-in', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    renderWithRouter(<App />, '/');
+
+    await user.click(screen.getByRole('link', { name: /check my air now/i }));
+
+    // The guard redirects rather than showing a dashboard they cannot use.
+    expect(
+      await screen.findByRole('heading', { level: 1, name: /sign in to smogwise/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('takes a signed-in visitor straight from the call to action to the dashboard', async () => {
+    stubApi({ signedIn: true });
     const user = userEvent.setup();
     renderWithRouter(<App />, '/');
 
@@ -38,7 +63,7 @@ describe('routing', () => {
   });
 
   it('navigates back home from the header', async () => {
-    stubApi();
+    stubApi({ signedIn: true });
     const user = userEvent.setup();
     renderWithRouter(<App />, '/dashboard');
 
@@ -70,43 +95,34 @@ describe('shell', () => {
   it('puts the skip link first in the tab order on every route', async () => {
     stubApi();
     const user = userEvent.setup();
-    renderWithRouter(<App />, '/dashboard');
+    renderWithRouter(<App />, '/');
 
     await user.tab();
     expect(screen.getByRole('link', { name: /skip to main content/i })).toHaveFocus();
   });
 
-  it('marks the active route in the navigation', () => {
-    stubApi();
+  it('marks the active route in the navigation', async () => {
+    stubApi({ signedIn: true });
     renderWithRouter(<App />, '/dashboard');
 
     // The footer links to the same routes, so these queries are scoped to the
     // main navigation.
     const nav = screen.getByRole('navigation', { name: 'Main' });
-    const active = within(nav).getByRole('link', { name: 'Dashboard' });
+    const active = await within(nav).findByRole('link', { name: 'Dashboard' });
 
     expect(active).toHaveAttribute('aria-current', 'page');
-    expect(
-      within(nav).getByRole('link', { name: 'Home' }),
-    ).not.toHaveAttribute('aria-current');
+    expect(within(nav).getByRole('link', { name: 'Home' })).not.toHaveAttribute(
+      'aria-current',
+    );
   });
 
-  it('offers the call to action only where it is not redundant', () => {
+  it('hides the sign-in action on the sign-in page itself', async () => {
     stubApi();
-    const { unmount } = renderWithRouter(<App />, '/');
-    const header = screen.getByRole('banner');
+    renderWithRouter(<App />, '/login');
+    await screen.findByLabelText(/email address/i);
 
     expect(
-      within(header).getByRole('link', { name: /check my air/i }),
-    ).toBeInTheDocument();
-    unmount();
-
-    stubApi();
-    renderWithRouter(<App />, '/dashboard');
-    expect(
-      within(screen.getByRole('banner')).queryByRole('link', {
-        name: /check my air/i,
-      }),
+      within(screen.getByRole('banner')).queryByRole('link', { name: /log in/i }),
     ).not.toBeInTheDocument();
   });
 

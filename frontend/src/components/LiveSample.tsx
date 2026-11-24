@@ -57,12 +57,21 @@ export function LiveSample() {
   }
 
   if (state.status === 'unavailable') {
+    // A designed empty state rather than an error. This sits in the hero, so
+    // a red failure message would be the first thing a visitor reads about a
+    // component that is only illustrative.
     return (
-      <aside className="sample-card" aria-label="Example live reading">
-        <p className="sample-label">Live example</p>
+      <aside className="sample-card sample-card-empty" aria-label="Example reading">
+        <p className="sample-label sample-label-idle">Live example</p>
+
+        <p className="sample-reading" aria-hidden="true">
+          <span className="sample-number sample-number-idle">—</span>
+          <span className="sample-scale">US AQI</span>
+        </p>
+
         <p className="sample-fallback">
-          The example reading could not be loaded right now. The dashboard will
-          still fetch your own location on demand.
+          No live reading to show right now. Open the dashboard and search for
+          your city to fetch one.
         </p>
       </aside>
     );

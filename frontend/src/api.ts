@@ -47,12 +47,18 @@ async function toApiError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, message);
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+export async function requestJson<T>(
+  path: string,
+  init?: RequestInit,
+): Promise<T> {
   let response: Response;
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
       ...init,
+      // The session lives in an httpOnly cookie, which is only sent
+      // cross-origin when credentials are included.
+      credentials: 'include',
       headers: {
         accept: 'application/json',
         ...(init?.body ? { 'content-type': 'application/json' } : {}),

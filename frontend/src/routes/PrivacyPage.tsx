@@ -4,26 +4,37 @@ import { Link } from 'react-router-dom';
  * Privacy page.
  *
  * Every claim here is a property of the implementation, not a policy promise:
- * there is no account system, no analytics, and no server-side storage of
- * household data. Linked code backs each statement.
+ * accounts hold only an email and a password hash, there is no analytics, and
+ * no household data is stored server-side. Linked code backs each statement.
  */
 const REPO = 'https://github.com/Cyberexe1/Promptwars2';
 
 export function PrivacyPage() {
   return (
-    <div className="shell narrow section">
+    <div className="shell section page-narrow">
       <p className="eyebrow">Privacy</p>
       <h1>What SmogWise does with your data</h1>
       <p className="lede">
-        Short version: there is no account, no tracking, and nothing about your
-        household is stored on a server. This page explains exactly what
-        happens to each piece of information.
+        Short version: an account stores your email address and a hashed
+        password, and nothing else about you reaches our servers. No tracking,
+        no analytics. This page explains exactly what happens to each piece of
+        information.
       </p>
 
       <section className="card" aria-labelledby="collect-heading">
         <h2 id="collect-heading">What the app handles</h2>
 
         <dl className="privacy-list">
+          <dt>Your account</dt>
+          <dd>
+            An email address and a password. The password is never stored:
+            what is kept is a scrypt hash, which cannot be reversed back into
+            your password. The record is keyed by a SHA-256 of your email
+            rather than the address itself. Your email is used only to
+            identify you at sign-in and to show who is signed in. No
+            marketing, ever, because there is no mailing list.
+          </dd>
+
           <dt>Your location</dt>
           <dd>
             Used to fetch an air-quality reading, then discarded. If you share
@@ -64,13 +75,19 @@ export function PrivacyPage() {
       <section className="card" aria-labelledby="not-heading">
         <h2 id="not-heading">What the app does not do</h2>
         <ul className="feature-list">
-          <li>No accounts, sign-in, or passwords</li>
           <li>No analytics, advertising, or third-party tracking scripts</li>
-          <li>No cookies</li>
+          <li>No tracking cookies. The only cookie is your sign-in session</li>
           <li>No selling, sharing, or profiling of any kind</li>
           <li>No storage of health answers or precise coordinates</li>
-          <li>No email address is ever requested</li>
+          <li>No storage of your plans on our servers</li>
+          <li>No marketing email, because there is no mailing list</li>
         </ul>
+
+        <p className="hint">
+          The session cookie is marked <code>HttpOnly</code>, so no script can
+          read it, and <code>SameSite=Lax</code>, which limits its use from
+          other sites.
+        </p>
       </section>
 
       <section className="card" aria-labelledby="third-heading">

@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 
 export function NotFoundPage() {
   return (
-    <section className="shell narrow section">
+    <section className="shell section page-narrow">
       <p className="eyebrow">Page not found</p>
       <h1>That page does not exist</h1>
       <p className="lede">

@@ -88,7 +88,8 @@ export function SiteFooter() {
               every suggestion.
             </p>
             <p className="footer-tagline">
-              No account, no tracking, nothing stored on a server.
+              No tracking. Your household answers and saved plans stay on your
+              own device.
             </p>
           </div>
 

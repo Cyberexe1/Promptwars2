@@ -17,6 +17,9 @@ const { loadConfig } = await import('../src/config.js');
 const { getCurrentAirQuality } = await import('../src/services/airQuality.js');
 const { searchLocations } = await import('../src/services/geocoding.js');
 const { upstreamUnavailable } = await import('../src/utils/errors.js');
+const { createSessionToken, SESSION_COOKIE } = await import(
+  '../src/services/sessions.js'
+);
 
 const ALLOWED_ORIGIN = 'http://localhost:5173';
 
@@ -61,6 +64,21 @@ const VALID_BODY = {
   location: { name: 'Delhi', latitude: 28.61, longitude: 77.21 },
   profile: VALID_PROFILE,
 };
+
+/**
+ * A valid session for the plan endpoint, which sits behind the account
+ * boundary. Authentication itself is covered in `auth.test.ts`; these cases
+ * are about validation and error handling.
+ */
+const SESSION = `${SESSION_COOKIE}=${createSessionToken('test-user')}`;
+
+/** POSTs a plan request as a signed-in user. */
+function postPlan(body: unknown) {
+  return request(app)
+    .post('/api/recommendations')
+    .set('Cookie', SESSION)
+    .send(body as object);
+}
 
 beforeEach(() => {
   vi.mocked(getCurrentAirQuality).mockResolvedValue(READING);
@@ -218,7 +236,7 @@ describe('GET /api/air-quality', () => {
 
 describe('POST /api/recommendations', () => {
   it('returns a complete, attributed plan', async () => {
-    const response = await request(app).post('/api/recommendations').send(VALID_BODY);
+    const response = await postPlan(VALID_BODY);
 
     expect(response.status).toBe(200);
     expect(response.body.recommendations.length).toBeGreaterThanOrEqual(4);
@@ -232,7 +250,7 @@ describe('POST /api/recommendations', () => {
   });
 
   it('gives every recommendation the fields the UI needs', async () => {
-    const response = await request(app).post('/api/recommendations').send(VALID_BODY);
+    const response = await postPlan(VALID_BODY);
 
     for (const recommendation of response.body.recommendations) {
       expect(recommendation).toMatchObject({
@@ -251,12 +269,10 @@ describe('POST /api/recommendations', () => {
   });
 
   it('raises precautions for a sensitive household at the same reading', async () => {
-    const response = await request(app)
-      .post('/api/recommendations')
-      .send({
-        ...VALID_BODY,
-        profile: { ...VALID_PROFILE, sensitive: true },
-      });
+    const response = await postPlan({
+      ...VALID_BODY,
+      profile: { ...VALID_PROFILE, sensitive: true },
+    });
 
     expect(response.body.risk.level).toBe('unhealthy');
     expect(response.body.risk.effectiveLevel).toBe('very-unhealthy');
@@ -291,19 +307,17 @@ describe('POST /api/recommendations', () => {
       { ...VALID_BODY, location: { ...VALID_BODY.location, latitude: 120 } },
     ],
   ])('rejects %s', async (_label, body) => {
-    const response = await request(app).post('/api/recommendations').send(body);
+    const response = await postPlan(body);
 
     expect(response.status).toBe(400);
     expect(response.body.error.code).toBe('BAD_REQUEST');
   });
 
   it('ignores unexpected extra fields instead of trusting them', async () => {
-    const response = await request(app)
-      .post('/api/recommendations')
-      .send({
-        ...VALID_BODY,
-        profile: { ...VALID_PROFILE, isAdmin: true, injected: '<script>' },
-      });
+    const response = await postPlan({
+      ...VALID_BODY,
+      profile: { ...VALID_PROFILE, isAdmin: true, injected: '<script>' },
+    });
 
     expect(response.status).toBe(200);
     expect(JSON.stringify(response.body)).not.toContain('<script>');
@@ -312,6 +326,7 @@ describe('POST /api/recommendations', () => {
   it('rejects a malformed JSON body', async () => {
     const response = await request(app)
       .post('/api/recommendations')
+      .set('Cookie', SESSION)
       .set('content-type', 'application/json')
       .send('{"location":');
 
@@ -320,9 +335,10 @@ describe('POST /api/recommendations', () => {
   });
 
   it('rejects a body beyond the size ceiling', async () => {
-    const response = await request(app)
-      .post('/api/recommendations')
-      .send({ ...VALID_BODY, padding: 'x'.repeat(32 * 1024) });
+    const response = await postPlan({
+      ...VALID_BODY,
+      padding: 'x'.repeat(32 * 1024),
+    });
 
     expect(response.status).toBe(413);
   });

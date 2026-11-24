@@ -33,12 +33,39 @@ No API key is needed. [Open-Meteo](https://open-meteo.com/) serves both the geoc
 
 ## Endpoints
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/health` | Liveness probe for App Runner. Makes no upstream call. |
-| `GET` | `/api/locations?query=` | City search. Returns an empty list when nothing matches. |
-| `GET` | `/api/air-quality?latitude=&longitude=&name=` | Current reading plus the official risk band. |
-| `POST` | `/api/recommendations` | Personalised plan for a household. |
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `GET` | `/health` | — | Liveness probe for App Runner. Makes no upstream call. |
+| `POST` | `/api/auth/signup` | — | Create an account and start a session. |
+| `POST` | `/api/auth/login` | — | Start a session. |
+| `POST` | `/api/auth/logout` | — | Clear the session cookie. |
+| `GET` | `/api/auth/me` | cookie | Who is signed in, or 401. |
+| `GET` | `/api/locations?query=` | — | City search. Returns an empty list when nothing matches. |
+| `GET` | `/api/air-quality?latitude=&longitude=&name=` | — | Current reading, risk band, and 24-hour outlook. |
+| `POST` | `/api/recommendations` | **required** | Personalised plan for a household. |
+
+Published air-quality data stays public, because the landing page shows a live
+reading to anonymous visitors. `/api/recommendations` is the one endpoint that
+accepts household and health answers, so it is the one behind the account
+boundary.
+
+## Accounts and sessions
+
+| Decision | Reason |
+|---|---|
+| scrypt for password hashing | Ships with Node, so no dependency, and memory-hard, which makes bulk offline cracking expensive rather than merely slow. Cost parameters are stored per hash, so they can be raised later without invalidating existing passwords. |
+| Minimum 12 characters, maximum 200 | The floor follows current guidance; the ceiling stops a very long password being a cheap way to make the server do expensive work. |
+| Stateless HMAC-signed cookie | No session table to scale or clean. The trade-off: logout clears the cookie but cannot invalidate a copy already taken. Tokens last 7 days and carry a `jti`, so a denylist can be added if immediate revocation is ever needed. |
+| `HttpOnly`, `SameSite=Lax`, `Secure` in production | Script cannot read the token, which blunts cross-site scripting; `SameSite` limits cross-site use. |
+| Identical wording for every credential failure | A different message or status for "no such account" would let anyone enumerate registered addresses. |
+| A dummy hash is verified when no user exists | Without it, a missing account would answer faster than a wrong password, which leaks the same thing through timing. |
+| Separate, much tighter rate limit on credential endpoints | Hashing is deliberately expensive, so these are the most attractive endpoints for both brute force and resource exhaustion. |
+| Records keyed by `sha256(email)` | A key listing reveals no addresses. The email is kept in the item because the interface shows who is signed in. |
+| `ConditionExpression` on signup | Checking then writing would leave a race between two concurrent signups for one address. |
+| `ConsistentRead` when loading a password hash | A stale replica read could accept a password that has since been changed. |
+
+Accounts hold an email, a password hash, and a creation timestamp. Nothing
+about a household, its health answers, or its plans is stored server-side.
 
 ### `POST /api/recommendations`
 
@@ -88,8 +115,9 @@ When the provider returns neither `us_aqi` nor `pm2_5`, the service does not gue
 - Upstream calls use `AbortSignal` timeouts, refuse redirects, and cap response size.
 - External responses are parsed through schemas and treated strictly as data. The Bedrock prompt wraps the user-supplied location name in a delimiter and instructs the model to ignore instructions inside it.
 - Only `AppError` messages reach clients. Unexpected errors log by name and return a generic message, verified by a test asserting that connection details do not leak.
-- Logs never receive coordinates, health preferences, or credentials.
-- No API keys exist in this service. AWS credentials come from the standard provider chain, which is the App Runner instance role in production.
+- Logs never receive coordinates, health preferences, email addresses, or credentials. Auth events log the outcome only.
+- The only secret is `SESSION_SECRET`, generated into Secrets Manager by the stack and injected by App Runner at start-up. The server refuses to start in production without it, rather than signing sessions with a weak or ephemeral key.
+- No third-party API keys exist. AWS credentials come from the standard provider chain, which is the App Runner instance role in production.
 
 ## Tests
 
@@ -102,6 +130,9 @@ When the provider returns neither `us_aqi` nor `pm2_5`, the service does not gue
 | `tests/recommend.test.ts` | Over 1,000 household and band combinations asserting plan size, no duplicates, no contradictions, and safety-critical selections |
 | `tests/planner.test.ts` | Model-output merge: unknown ids discarded, unsafe wording replaced, code-owned fields preserved |
 | `tests/routes.test.ts` | Status codes, validation rejection, CORS policy, error-message safety |
+| `tests/outlook.test.ts` | Past hours dropped, window limits, gaps, ties, flat forecasts |
+| `tests/cache.test.ts` | Grid keys, expiry, eviction, failure degradation, what is stored |
+| `tests/auth.test.ts` | Hashing, token forgery and expiry, enumeration resistance, cookie flags, rate limiting, route protection |
 
 The matrix test in `recommend.test.ts` is the main safety guarantee: for every household shape at every band it asserts a usable plan with no self-contradicting advice, such as recommending both opening and closing windows.
 
@@ -116,4 +147,8 @@ See [`.env.example`](.env.example). All have working defaults except `BEDROCK_MO
 | `UPSTREAM_TIMEOUT_MS` | `6000` | |
 | `AWS_REGION` | `us-east-1` | Must be a region where the Bedrock model is enabled. |
 | `BEDROCK_MODEL_ID` | empty | Empty disables Bedrock and uses the rules engine alone. |
+| `SESSION_SECRET` | empty | Random per start outside production. **Required, 32+ characters, in production.** |
+| `DYNAMODB_TABLE_NAME` | empty | Empty keeps accounts and the reading cache in memory, lost on restart. |
+| `AQI_CACHE_TTL_SECONDS` | `600` | Zero disables reading caching. |
 | `RATE_LIMIT_MAX` | `60` | Requests per window per client. |
+| `AUTH_RATE_LIMIT_MAX` | `10` | Credential attempts per 15 minutes per client. |

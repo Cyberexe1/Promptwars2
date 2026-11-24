@@ -115,7 +115,7 @@ export function LandingPage() {
             </div>
 
             <ul className="hero-points">
-              <li>No account, no tracking, nothing stored</li>
+              <li>No tracking, and no household data on our servers</li>
               <li>Free and keyless air-quality data</li>
               <li>Safety rules in code, not left to a chatbot</li>
             </ul>
@@ -136,15 +136,15 @@ export function LandingPage() {
               </div>
             </div>
             <p className="preview-caption">
-              Not a mockup. This is the live reading, fetched when you loaded
-              the page.
+              Real data, not a mockup: this reading is fetched when the page
+              loads.
             </p>
           </div>
         </div>
       </section>
 
       <section className="section section-sunken" aria-labelledby="problem-heading">
-        <div className="shell narrow">
+        <div className="shell prose">
           <p className="eyebrow">The problem</p>
           <h2 id="problem-heading">
             Generic smog advice ignores the household it is given to
@@ -264,7 +264,9 @@ export function LandingPage() {
             <article className="panel">
               <h3>Your details stay yours</h3>
               <p>
-                No account, no analytics, no storage. Coordinates are rounded to
+                An account holds only your email and a hashed password. No
+              analytics, no tracking, and no household data on our servers.
+              Coordinates are rounded to
                 a few hundred metres, health answers never reach a log, and the
                 community view excludes household details entirely.
               </p>
@@ -295,7 +297,7 @@ export function LandingPage() {
       </section>
 
       <section className="cta" aria-labelledby="cta-heading">
-        <div className="shell narrow cta-inner">
+        <div className="shell cta-inner">
           <h2 id="cta-heading">See what your air means today</h2>
           <p>
             One search, a few optional answers, and a plan you can act on before

@@ -4,7 +4,9 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config as defaultConfig, type AppConfig } from './config.js';
 import { apiRouter } from './routes/index.js';
+import { createAuthRouter } from './routes/auth.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { attachUser } from './middleware/requireAuth.js';
 import { AppError } from './utils/errors.js';
 
 /**
@@ -27,6 +29,10 @@ export function createApp(config: AppConfig = defaultConfig): express.Express {
 
   app.use(
     cors({
+      // Session cookies are only sent cross-origin when credentials are
+      // allowed, which in turn forbids a wildcard origin. The explicit
+      // allowlist below is therefore a requirement, not just good practice.
+      credentials: true,
       origin(origin, callback) {
         // Same-origin and server-to-server calls arrive without an Origin.
         if (!origin || config.corsAllowedOrigins.includes(origin)) {
@@ -52,6 +58,10 @@ export function createApp(config: AppConfig = defaultConfig): express.Express {
     res.json({ status: 'ok', uptimeSeconds: Math.round(process.uptime()) });
   });
 
+  // Reads the session cookie when one is present. Non-blocking: public
+  // endpoints keep working for signed-out visitors.
+  app.use(attachUser);
+
   app.use(
     '/api',
     rateLimit({
@@ -66,8 +76,11 @@ export function createApp(config: AppConfig = defaultConfig): express.Express {
         },
       },
     }),
-    apiRouter,
   );
+
+  // Mounted before the general router so the stricter auth rate limit applies.
+  app.use('/api/auth', createAuthRouter(config));
+  app.use('/api', apiRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

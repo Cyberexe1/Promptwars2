@@ -103,13 +103,52 @@ The cache exists for efficiency, and its key doubles as a privacy boundary.
 
 | Data | Location | Lifetime |
 |---|---|---|
+| Email and password hash | DynamoDB, keyed by `sha256(email)` | Until the account is deleted |
+| Session | Signed cookie in the browser | 7 days |
 | Air-quality readings | DynamoDB, keyed by grid cell | 10 minutes, TTL |
 | Household profile | React state only | The page session |
 | Saved plans | Browser local storage | Until the user deletes them |
 | Precise coordinates | Nowhere | Rounded to 3 decimals in the browser before use, to 2 for the cache key |
 | Health answers | Never persisted, never logged | — |
 
-There is no user account, no session, and no analytics. That is a deliberate choice rather than an unfinished feature: the application is useful anonymously, so adding Cognito would introduce an attack surface and a store of health-adjacent data for no user benefit.
+Accounts were added so a returning user can reach their dashboard. The
+boundary was drawn deliberately: the server learns an email address and a
+password hash, and nothing else. Household answers are used to generate a plan
+and discarded, and the plan itself is stored on the device, because its summary
+can disclose that someone in the household is medically sensitive.
+
+Amazon Cognito was not used. Signup and login are two endpoints over a hashed
+password and a signed cookie; a managed identity provider would add a hosted
+UI, a second user directory, and a larger dependency surface for no capability
+this application needs.
+
+## Authentication
+
+```mermaid
+flowchart LR
+    L[Login page] -->|email + password| A[POST /api/auth/login]
+    A --> S[(DynamoDB: email hash, password hash)]
+    A -->|Set-Cookie: HttpOnly, SameSite=Lax| B[Browser]
+    B -->|cookie on every request| M[attachUser]
+    M --> P{Route needs a session?}
+    P -->|no| OK[Public: air quality, city search]
+    P -->|yes| G[requireAuth] --> R[POST /api/recommendations]
+```
+
+The cookie is `HttpOnly`, so no script can read it. That is why the client
+cannot answer "am I signed in?" locally and must ask `/api/auth/me` on load,
+and why the route guard waits for that answer rather than assuming signed out.
+Assuming signed out would eject a signed-in user on every page refresh.
+
+Sessions are stateless: a signed payload carrying the user id, an expiry, and a
+token id. Nothing is stored server-side, so there is no session table to scale
+or clean up. The honest cost is that logging out clears the cookie but cannot
+invalidate a token already copied elsewhere, which is why tokens expire in
+seven days and carry a `jti` for a future denylist.
+
+The route guard in the browser is a convenience. The server rejects an
+unauthenticated plan request independently, so deleting the guard would change
+the user experience and expose nothing.
 
 ## Frontend structure
 

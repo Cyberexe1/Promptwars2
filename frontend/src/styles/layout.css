@@ -21,6 +21,39 @@
   max-width: var(--shell-narrow);
 }
 
+/**
+ * Readable-width text that still starts at the page's left edge.
+ *
+ * A centred narrow container would indent the block relative to every other
+ * section, which reads as a misalignment rather than a deliberate choice.
+ */
+.prose {
+  max-width: var(--measure);
+}
+
+.prose > p:last-child {
+  margin-bottom: 0;
+}
+
+/**
+ * Standalone pages. Content is capped for readability but stays flush with
+ * the header and footer, so navigating between pages causes no sideways jump.
+ */
+.page-narrow {
+  max-width: calc(var(--shell-narrow) + 2.5rem);
+  margin-left: max(
+    1.25rem,
+    calc((100vw - var(--shell)) / 2 + 1.25rem)
+  );
+  margin-right: auto;
+}
+
+@media (max-width: 74rem) {
+  .page-narrow {
+    margin-left: auto;
+  }
+}
+
 .section {
   padding: var(--gap-2xl) 0;
 }
@@ -152,8 +185,53 @@
   font-weight: var(--weight-semibold);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-sm);
+  flex: 0 0 auto;
+}
+
 .header-cta {
   flex: 0 0 auto;
+}
+
+.header-identity {
+  max-width: 12rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--text-sm);
+  color: var(--ink-faint);
+}
+
+/* ----- Auth form ----- */
+
+.auth-form {
+  max-width: 26rem;
+  margin-top: var(--gap-lg);
+}
+
+.auth-switch {
+  margin: var(--gap-md) 0 0;
+  font-size: var(--text-base);
+  color: var(--ink-soft);
+}
+
+/* A button, not a link: it changes mode in place rather than navigating. */
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--brand-dark);
+  font-weight: var(--weight-semibold);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.link-button:hover {
+  color: var(--ink);
 }
 
 /* Below this width the nav labels crowd the call to action, so the labels
@@ -164,12 +242,17 @@
   }
 
   .site-nav-link {
-    padding: 0.4rem 0.55rem;
+    padding: 0.4rem 0.5rem;
     font-size: var(--text-base);
   }
 
   .brand-word {
     font-size: var(--text-md);
+  }
+
+  /* The address is the first thing to go: the log-out control matters more. */
+  .header-identity {
+    display: none;
   }
 }
 

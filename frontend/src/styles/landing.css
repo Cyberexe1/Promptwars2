@@ -187,6 +187,22 @@
   color: var(--ink-faint);
 }
 
+/* ----- Preview when no live reading is available ----- */
+
+.sample-card-empty .sample-reading {
+  margin-bottom: var(--gap-sm);
+}
+
+.sample-number-idle {
+  color: var(--line-strong);
+}
+
+/* The pulsing dot implies live data, so it stops when there is none. */
+.sample-label-idle::before {
+  background: var(--line-strong);
+  animation: none;
+}
+
 /* ----- Steps ----- */
 
 .steps {

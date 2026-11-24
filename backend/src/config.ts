@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 
 /**
@@ -42,6 +43,11 @@ const environmentSchema = z.object({
   BEDROCK_MODEL_ID: z.string().default(''),
   BEDROCK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(12000),
   DYNAMODB_TABLE_NAME: z.string().default(''),
+  SESSION_SECRET: z.string().default(''),
+  // Credential endpoints get their own, much tighter budget than the rest of
+  // the API, because password hashing is expensive by design.
+  AUTH_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(900000),
+  AUTH_RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(10),
   // Provider readings update hourly, so a few minutes costs no freshness
   // while removing most repeat upstream calls for the same area.
   AQI_CACHE_TTL_SECONDS: z.coerce.number().int().min(0).max(3600).default(600),
@@ -62,6 +68,10 @@ export interface AppConfig {
   bedrockTimeoutMs: number;
   /** Empty string means the air-quality cache stays in process memory. */
   dynamoDbTableName: string;
+  /** HMAC key for session cookies. Required in production. */
+  sessionSecret: string;
+  authRateLimitWindowMs: number;
+  authRateLimitMax: number;
   /** Zero disables air-quality caching entirely. */
   aqiCacheTtlSeconds: number;
   rateLimitWindowMs: number;
@@ -87,9 +97,22 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const env = parsed.data;
 
+  const sessionSecret = env.SESSION_SECRET.trim();
+
+  // Fail fast rather than signing production sessions with a weak or
+  // ephemeral key, which would let anyone forge a session cookie.
+  if (env.NODE_ENV === 'production' && sessionSecret.length < 32) {
+    throw new Error(
+      'SESSION_SECRET must be set to at least 32 characters when NODE_ENV=production',
+    );
+  }
+
   return {
     nodeEnv: env.NODE_ENV,
     port: env.PORT,
+    // Outside production a random key is generated per start. Sessions do not
+    // survive a restart, which is the safer default for a developer machine.
+    sessionSecret: sessionSecret || randomBytes(32).toString('hex'),
     corsAllowedOrigins: parseOrigins(env.CORS_ALLOWED_ORIGINS),
     geocodingApiUrl: env.GEOCODING_API_URL,
     airQualityApiUrl: env.AIR_QUALITY_API_URL,
@@ -101,6 +124,8 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     aqiCacheTtlSeconds: env.AQI_CACHE_TTL_SECONDS,
     rateLimitWindowMs: env.RATE_LIMIT_WINDOW_MS,
     rateLimitMax: env.RATE_LIMIT_MAX,
+    authRateLimitWindowMs: env.AUTH_RATE_LIMIT_WINDOW_MS,
+    authRateLimitMax: env.AUTH_RATE_LIMIT_MAX,
   };
 }
 

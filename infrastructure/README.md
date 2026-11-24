@@ -195,7 +195,8 @@ Both deploy workflows are `workflow_dispatch` only and require typing `deploy` t
 | Separate ECR access and instance roles | The running container cannot pull or push images. |
 | `bedrock:InvokeModel` granted conditionally | An account not using Bedrock grants no model permissions. |
 | No `dynamodb:Scan` or table administration | The application only reads and writes individual items and queries. |
-| No Secrets Manager entry | Open-Meteo needs no API key, so the deployment holds no secrets to leak. |
+| `SESSION_SECRET` generated into Secrets Manager | The value never passes through a template parameter, a shell history, or a CI log. The instance role can read that one secret and nothing else. |
+| No third-party API key anywhere | Open-Meteo needs no key, so the session secret is the only secret the deployment holds. |
 | `DeletionPolicy: Retain` on the bucket, table, and registry | A stack teardown cannot destroy user data or a running service's image. |
 | CORS pinned to the CloudFront origin | A rejected origin returns 403, keeping it out of the 5xx alarm. |
 

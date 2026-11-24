@@ -106,7 +106,7 @@ SmogWise uses a hybrid approach so that safety does not depend only on a languag
 
 ## Current Status
 
-**All three phases are code complete.** 324 tests pass, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the container image builds. What remains needs your AWS account and a camera: the live deployment, a manual screen-reader pass, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
+**All three phases are code complete.** 389 tests pass, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the container image builds. What remains needs your AWS account and a camera: the live deployment, a manual screen-reader pass, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
 
 | Area | State |
 |---|---|
@@ -115,13 +115,14 @@ SmogWise uses a hybrid approach so that safety does not depend only on a languag
 | Privacy page | Built, every claim linked to the code behind it |
 | Saved plans | Built, device-local with user-controlled deletion |
 | Community checklist | Built, household and health details stripped |
-| React frontend | 169 tests passing |
-| Node.js API | 155 tests passing |
+| React frontend | 196 tests passing |
+| Node.js API | 193 tests passing |
 | 24-hour outlook | Names the cleanest and worst hours ahead, so "shift your outdoor time" is actionable |
 | Live air-quality data | Working against Open-Meteo, no API key required |
 | Risk and recommendation rules | Complete, verified over 1,000+ household and band combinations |
 | Amazon Bedrock | Integrated with schema validation and a safe fallback; disabled until a model id is configured |
-| Amazon DynamoDB | Backs the air-quality cache with TTL. Holds no personal data |
+| Accounts | Email and scrypt-hashed password, signed httpOnly session cookie |
+| Amazon DynamoDB | User accounts plus the air-quality cache with TTL |
 | Container image | Dockerfile builds, multi-stage, non-root |
 | AWS infrastructure | 5 CloudFormation templates, all passing `cfn-lint` |
 | CI/CD | 3 workflows, 8 jobs, OIDC, dependency + container + secret scanning |
@@ -182,11 +183,16 @@ The same checks run in CI on every push, across eight jobs that add Trivy image 
 
 ## Pages
 
-| Route | Purpose |
-|---|---|
-| `/` | Landing page: what the product does, how it works, a live example reading, and the safety model |
-| `/dashboard` | The working tool: location, household details, 24-hour outlook, and the generated plan |
-| `/privacy` | What the app does with each piece of data, with links to the code that backs each claim |
+| Route | Auth | Purpose |
+|---|---|---|
+| `/` | — | Landing page: what the product does, how it works, a live example reading, and the safety model |
+| `/login` | — | Sign in or create an account, two modes on one page |
+| `/privacy` | — | What the app does with each piece of data, with links to the code that backs each claim |
+| `/dashboard` | **required** | The working tool: location, household details, 24-hour outlook, and the generated plan |
+
+Published air-quality data stays public, so the landing page can show a live
+reading to anyone. The dashboard needs an account because it is where household
+and health answers are entered.
 
 Client-side routing means a deep link such as `/dashboard` is not a file in S3. CloudFront is configured to serve the app shell for 403 and 404 so React Router can render the route. That trade-off and its mitigation are documented in [`infrastructure/05-frontend.yaml`](infrastructure/05-frontend.yaml).
 
@@ -457,7 +463,7 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 #### Feature completion
 
 - [x] Add saved plans and user-controlled deletion. Device-local, with single and bulk delete behind a confirmation
-- [x] ~~Add Amazon Cognito only if private accounts or cross-device profiles are required.~~ Not required: plans stay on the device, so accounts would add an attack surface and a store of health-adjacent data for no user benefit
+- [x] Add accounts. Built directly rather than with Cognito: signup and login over a scrypt hash and a signed httpOnly cookie, which avoids a hosted UI and a second user directory for no capability this app needs. Plans still stay on the device.
 - [x] Add community checklists that contain no private household or health data. Subtractive by design, asserted by tests
 - [x] Refine low-emission routines, indoor air-quality guidance, and sustainable alternatives. 20 reviewed catalogue entries across four categories
 - [x] Show the method, source, and uncertainty behind impact estimates. Every card carries an evidence rating; no entry claims a percentage
@@ -546,6 +552,6 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 - [x] The README explains the vertical, approach, logic, operation, and assumptions.
 - [x] Setup, test, and deployment instructions are verified. Every local command was run; deployment commands are scripted but unapplied
 - [x] No credentials, tokens, personal information, or `.env` files are committed. Only `.env.example`; CI also runs Gitleaks over full history
-- [x] The application includes tests and accessibility checks. 265 tests, including axe on every route
+- [x] The application includes tests and accessibility checks. 389 tests, including axe on every route
 - [ ] The video is unlisted on YouTube or shared through a publicly accessible Drive link.
 - [ ] The public GitHub repository URL is submitted within the allowed three attempts.

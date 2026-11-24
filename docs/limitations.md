@@ -17,7 +17,15 @@ Written plainly, because a reviewer finding these unlisted is worse than reading
 
 **App Runner is in maintenance mode.** AWS closed it to new customers on 30 April 2026 and plans no new features ([AWS notice](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html)). The template targets it because it was the requested platform, and it still works for accounts that used the service before that date. An ineligible account needs Amazon ECS Express Mode instead; only the compute service changes. The eligibility check is the first thing in [`infrastructure/README.md`](../infrastructure/README.md).
 
-**No authentication.** The application is useful anonymously, so accounts would add an attack surface and a store of health-adjacent data for no user benefit. The cost is that saved plans do not follow a user to another device.
+**Sessions cannot be revoked server-side.** Tokens are stateless and HMAC-signed, so logging out clears the cookie but cannot invalidate a copy taken beforehand. Tokens expire after seven days and carry a token id, so a denylist can be added if immediate revocation becomes a requirement. Rotating `SESSION_SECRET` invalidates every session at once, which is the emergency control.
+
+**There is no password reset.** Without a verified email channel there is no safe way to prove ownership of an address, and building an unverified reset would be worse than having none. A forgotten password currently means creating a new account.
+
+**Email addresses are not verified.** Anyone can register an address they do not own. The address is only an identifier here, never a contact channel, so nothing is sent to it and nothing is confirmed by it.
+
+**Accounts live in memory without DynamoDB.** Running locally with no `DYNAMODB_TABLE_NAME` keeps users in a process map, so they vanish on restart. The server logs a warning. Production supplies the table.
+
+**Saved plans still do not follow the account.** They remain in browser local storage even for a signed-in user, so they do not sync across devices. This is deliberate: a plan can disclose a household's medical sensitivity, and keeping it on the device keeps that out of any server-side store or backup.
 
 **Saved plans are device-local.** Clearing browser data removes them, private browsing blocks them, and they do not sync. The interface states this. The benefit is that a plan which may disclose a household's medical sensitivity never reaches a server, a log, or a backup.
 

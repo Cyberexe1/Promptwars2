@@ -127,14 +127,15 @@ describe('live example reading', () => {
     expect(paths.some((path) => path.includes('/api/recommendations'))).toBe(false);
   });
 
-  it('degrades to a quiet note rather than an error when the sample fails', async () => {
+  it('degrades to a designed empty state rather than an error', async () => {
     stubApi({ airQuality: () => errorResponse(503, 'Upstream unavailable.') });
     renderLanding();
 
     expect(
-      await screen.findByText(/example reading could not be loaded/i),
+      await screen.findByText(/no live reading to show right now/i),
     ).toBeInTheDocument();
-    // A failed decorative sample must not raise an alert on the landing page.
+    // This sits in the hero and is only illustrative, so a failure must not
+    // raise an alert or look broken.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
