@@ -224,6 +224,29 @@ aws dynamodb delete-table --table-name smogwise --region $AWS_REGION
 aws ecr delete-repository --repository-name smogwise-api --force --region $AWS_REGION
 ```
 
+## One-command deployment
+
+[`deploy.ps1`](deploy.ps1) runs every step above in dependency order and wires
+the values that are easy to get wrong by hand: the CORS origin, the compiled
+`VITE_API_URL`, and the stack ordering.
+
+```powershell
+# Check access and print the plan without creating anything
+./deploy.ps1 -DryRun
+
+# Deploy. Asks for typed confirmation first.
+./deploy.ps1 -AlarmEmail you@example.com
+
+# With model-written wording enabled
+./deploy.ps1 -BedrockModelId eu.anthropic.claude-sonnet-4-5-20250929-v1:0
+```
+
+It refuses to start unless credentials work, the account can use App Runner,
+and Docker is running, and it fails the build if the bundle still points at
+`localhost`. On success it prints the GitHub repository variables for CI.
+
+[`../preflight.ps1`](../preflight.ps1) runs the same checks on their own.
+
 ## Validating templates locally
 
 ```bash
