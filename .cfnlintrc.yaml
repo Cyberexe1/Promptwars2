@@ -1,0 +1,14 @@
+templates:
+  - infrastructure/*.yaml
+
+ignore_checks:
+  # W3697: AWS::AppRunner::* is in maintenance mode since 2026-03-31.
+  #
+  # This is a known, accepted trade-off rather than an oversight. App Runner
+  # remains fully supported for existing customers and AWS has announced no
+  # sunset date, but it is closed to accounts that had not used it before
+  # 30 April 2026.
+  #
+  # See infrastructure/README.md for the eligibility check and the migration
+  # path to Amazon ECS Express Mode, which AWS recommends for new accounts.
+  - W3697

@@ -1,0 +1,122 @@
+name: Deploy frontend
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type "deploy" to confirm a push to production.
+        required: true
+        type: string
+
+concurrency:
+  group: deploy-frontend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  FRONTEND_BUCKET: ${{ vars.FRONTEND_BUCKET }}
+  CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+
+jobs:
+  deploy:
+    name: Build and publish
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check the confirmation input
+        if: inputs.confirm != 'deploy'
+        run: |
+          echo "Deployment not confirmed. Re-run and type 'deploy'."
+          exit 1
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install, check, and build
+        working-directory: frontend
+        env:
+          # Baked into the bundle at build time, so it must point at the
+          # deployed API before the build runs.
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
+        run: |
+          npm ci
+          npm run lint
+          npm run typecheck
+          npm test
+          npm run build
+
+      - name: Fail if the API URL was not baked in
+        working-directory: frontend
+        run: |
+          if grep -rq "localhost:3000" dist/assets; then
+            echo "The bundle still points at localhost. Set the VITE_API_URL variable."
+            exit 1
+          fi
+          echo "API URL looks correct."
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: smogwise-deploy-frontend
+
+      # Content-hashed assets first, with a long cache life. Uploading these
+      # before index.html means the new entry point never references an asset
+      # that is not yet in the bucket.
+      - name: Upload hashed assets
+        working-directory: frontend
+        run: |
+          aws s3 sync dist "s3://$FRONTEND_BUCKET" \
+            --exclude index.html \
+            --cache-control "public,max-age=31536000,immutable" \
+            --no-progress
+
+      # The entry point last, and never cached, so a deployment takes effect
+      # immediately instead of serving a stale bundle.
+      - name: Upload the entry point
+        working-directory: frontend
+        run: |
+          aws s3 cp dist/index.html "s3://$FRONTEND_BUCKET/index.html" \
+            --cache-control "no-cache,no-store,must-revalidate" \
+            --content-type "text/html; charset=utf-8" \
+            --no-progress
+
+      # Remove files that are no longer part of the build, after the new ones
+      # are in place.
+      - name: Remove orphaned files
+        working-directory: frontend
+        run: |
+          aws s3 sync dist "s3://$FRONTEND_BUCKET" --delete --no-progress
+
+      - name: Invalidate the CloudFront entry point
+        run: |
+          ID=$(aws cloudfront create-invalidation \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --paths "/" "/index.html" \
+            --query 'Invalidation.Id' --output text)
+          echo "Invalidation $ID created."
+          aws cloudfront wait invalidation-completed \
+            --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --id "$ID"
+          echo "Invalidation complete."
+
+      - name: Smoke test the deployed site
+        run: |
+          DOMAIN=$(aws cloudfront get-distribution \
+            --id "$CLOUDFRONT_DISTRIBUTION_ID" \
+            --query 'Distribution.DomainName' --output text)
+          echo "Checking https://$DOMAIN"
+          curl -fsS --retry 5 --retry-delay 5 "https://$DOMAIN" > /dev/null
+          echo "Checking the single-page-app fallback on a client route"
+          curl -fsS --retry 3 --retry-delay 5 "https://$DOMAIN/dashboard" > /dev/null
+          echo "Site responded on both paths."

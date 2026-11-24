@@ -1,0 +1,108 @@
+name: Deploy backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type "deploy" to confirm a push to production.
+        required: true
+        type: string
+
+# Never run two backend deployments at once.
+concurrency:
+  group: deploy-backend
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  # Required to exchange the GitHub OIDC token for AWS credentials.
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+  APP_RUNNER_SERVICE_ARN: ${{ vars.APP_RUNNER_SERVICE_ARN }}
+
+jobs:
+  deploy:
+    name: Build, push, and release
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Check the confirmation input
+        if: inputs.confirm != 'deploy'
+        run: |
+          echo "Deployment not confirmed. Re-run and type 'deploy'."
+          exit 1
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      # Never ship an image whose tests have not passed.
+      - name: Install and test
+        working-directory: backend
+        run: |
+          npm ci
+          npm run typecheck
+          npm test
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: smogwise-deploy-backend
+
+      - name: Log in to Amazon ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push the image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: true
+          # Tagged with the commit SHA for traceability, and with `latest`
+          # because that is the tag App Runner watches.
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Trigger the App Runner deployment
+        run: |
+          OPERATION_ID=$(aws apprunner start-deployment \
+            --service-arn "$APP_RUNNER_SERVICE_ARN" \
+            --query OperationId --output text)
+          echo "Deployment started: $OPERATION_ID"
+
+      - name: Wait for the service to become healthy
+        run: |
+          for i in $(seq 1 60); do
+            STATUS=$(aws apprunner describe-service \
+              --service-arn "$APP_RUNNER_SERVICE_ARN" \
+              --query 'Service.Status' --output text)
+            echo "Attempt $i: $STATUS"
+            case "$STATUS" in
+              RUNNING)   echo "Service is running."; exit 0 ;;
+              CREATE_FAILED|DELETE_FAILED)
+                         echo "Service entered $STATUS."; exit 1 ;;
+            esac
+            sleep 10
+          done
+          echo "Service did not reach RUNNING within 10 minutes."
+          exit 1
+
+      - name: Smoke test the deployed health endpoint
+        run: |
+          URL=$(aws apprunner describe-service \
+            --service-arn "$APP_RUNNER_SERVICE_ARN" \
+            --query 'Service.ServiceUrl' --output text)
+          echo "Checking https://$URL/health"
+          curl -fsS --retry 5 --retry-delay 5 "https://$URL/health"

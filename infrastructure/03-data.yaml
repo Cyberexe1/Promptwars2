@@ -1,0 +1,74 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  DynamoDB single table for SmogWise. Holds consented household preferences,
+  saved plans, short-lived air-quality cache entries, and community checklists.
+  Created in Phase 2 so the backend has a target; the saved-plan feature that
+  writes to it lands in Phase 3.
+
+Parameters:
+  TableName:
+    Type: String
+    Default: smogwise
+
+  EnablePointInTimeRecovery:
+    Type: String
+    AllowedValues: ['true', 'false']
+    Default: 'true'
+
+Conditions:
+  UsePitr: !Equals [!Ref EnablePointInTimeRecovery, 'true']
+
+Resources:
+  Table:
+    Type: AWS::DynamoDB::Table
+    # User data must survive a stack replacement or accidental deletion.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      TableName: !Ref TableName
+      # On-demand suits an early-stage workload with unpredictable traffic and
+      # removes the risk of throttling a demo.
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: pk
+          AttributeType: S
+        - AttributeName: sk
+          AttributeType: S
+      KeySchema:
+        - AttributeName: pk
+          KeyType: HASH
+        - AttributeName: sk
+          KeyType: RANGE
+      # Cache entries and, where chosen, saved plans carry an expiry so stale
+      # personal data removes itself rather than accumulating.
+      TimeToLiveSpecification:
+        AttributeName: expiresAt
+        Enabled: true
+      SSESpecification:
+        # AWS-owned key. Switch to a customer-managed KMS key if a compliance
+        # requirement calls for independent key control and rotation.
+        SSEEnabled: false
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: !If [UsePitr, true, false]
+      Tags:
+        - Key: Application
+          Value: SmogWise
+
+Outputs:
+  TableName:
+    Value: !Ref Table
+    Export:
+      Name: !Sub '${AWS::StackName}-TableName'
+
+  TableArn:
+    Value: !GetAtt Table.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TableArn'
+
+  KeyDesign:
+    Description: Access patterns this table supports.
+    Value: >
+      USER#<id>/PROFILE preferences;
+      USER#<id>/PLAN#<timestamp> saved plans;
+      LOCATION#<geohash>/AQI#<timestamp> cached readings with TTL;
+      COMMUNITY#<id>/CHECKLIST#<id> shared checklists.

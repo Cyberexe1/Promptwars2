@@ -106,17 +106,24 @@ SmogWise uses a hybrid approach so that safety does not depend only on a languag
 
 ## Current Status
 
-**Phase 1 is complete.** The application runs end to end locally: live air-quality data, deterministic risk assessment, a personalised plan, and 160 passing tests. Phase 2 (AWS deployment) and Phase 3 (polish and submission) are outstanding.
+**Phases 1 and 2 are complete.** The application runs end to end locally with a landing page and dashboard, and the full AWS deployment exists as validated infrastructure-as-code. 195 tests pass. Phase 3 (polish and submission) is outstanding.
 
 | Area | State |
 |---|---|
-| React frontend | Built, 47 tests passing |
-| Node.js API | Built, 113 tests passing |
+| Landing page | Built, with a live example reading |
+| Dashboard | Built, with a three-step progress indicator |
+| React frontend | 82 tests passing |
+| Node.js API | 113 tests passing |
 | Live air-quality data | Working against Open-Meteo, no API key required |
 | Risk and recommendation rules | Complete, verified over 1,000+ household and band combinations |
 | Amazon Bedrock | Integrated with schema validation and a safe fallback; disabled until a model id is configured |
-| Amazon DynamoDB | Schema designed, not yet implemented. Phase 3 feature (saved plans) |
-| AWS deployment | Not started. Phase 2 |
+| Amazon DynamoDB | Table deployable, schema designed. The saved-plan feature that writes to it is Phase 3 |
+| Container image | Dockerfile builds, multi-stage, non-root |
+| AWS infrastructure | 5 CloudFormation templates, all passing `cfn-lint` |
+| CI/CD | 3 GitHub Actions workflows, OIDC, no long-lived keys |
+| Deployed to AWS | **Not yet run.** Needs your AWS account. See [`infrastructure/README.md`](infrastructure/README.md) |
+
+> **Before deploying:** AWS closed App Runner to new customers on 30 April 2026. If your account did not use App Runner before that date, `04-backend.yaml` will not deploy. The runbook includes a one-command eligibility check and the alternative AWS recommends. Details in [`infrastructure/README.md`](infrastructure/README.md).
 
 ## Running It Locally
 
@@ -134,16 +141,31 @@ npm install
 npm run dev            # http://localhost:5173
 ```
 
-Open http://localhost:5173, search for a city, and generate a plan.
+Open http://localhost:5173 for the landing page, then follow "Check my air now" to the dashboard at `/dashboard`, search for a city, and generate a plan.
 
 To enable Bedrock personalisation, copy `backend/.env.example` to `backend/.env`, set `BEDROCK_MODEL_ID` and `AWS_REGION`, and make AWS credentials available through the standard provider chain. Without it the service runs on the deterministic rules engine and reports `generatedBy: "rules"`.
 
 ### Checks
 
 ```bash
-cd backend  && npm run typecheck && npm test
+cd backend  && npm run typecheck && npm test && npm run build
 cd frontend && npm run lint && npm run typecheck && npm test && npm run build
+
+# Infrastructure templates
+pip install cfn-lint && cfn-lint
+
+# Container image
+docker build -t smogwise-api:local ./backend
 ```
+
+## Pages
+
+| Route | Purpose |
+|---|---|
+| `/` | Landing page: what the product does, how it works, a live example reading, and the safety model |
+| `/dashboard` | The working tool: location, household details, and the generated plan |
+
+Client-side routing means a deep link such as `/dashboard` is not a file in S3. CloudFront is configured to serve the app shell for 403 and 404 so React Router can render the route. That trade-off and its mitigation are documented in [`infrastructure/05-frontend.yaml`](infrastructure/05-frontend.yaml).
 
 ## Technology Stack
 
@@ -353,50 +375,57 @@ Two things deliberately deferred rather than half-built:
 - **DynamoDB** is designed but unused, because nothing in the Phase 1 journey needs persistence. It arrives with saved plans in Phase 3.
 - **Authentication** is absent for the same reason. The app is useful anonymously, so Cognito is only justified once private saved data exists.
 
-### Phase 2: AWS Infrastructure, Deployment, and Security
+### Phase 2: AWS Infrastructure, Deployment, and Security — code complete
 
 **Goal:** Deploy a secure, observable production version on AWS.
 
+Everything below is written and validated locally. Applying it to a live AWS account is the one remaining step and needs your credentials. See [`infrastructure/README.md`](infrastructure/README.md).
+
 #### AWS resources
 
-- [ ] Create DynamoDB tables with encryption, TTL, and point-in-time recovery as needed.
-- [ ] Enable access to the selected Amazon Bedrock model in the deployment Region.
-- [ ] Store the external AQI API key in AWS Secrets Manager.
-- [ ] Create least-privilege IAM deployment and App Runner instance roles.
-- [ ] Create an Amazon ECR repository for the backend image.
-- [ ] Create a private S3 bucket for the React production build.
-- [ ] Create a CloudFront distribution with S3 Origin Access Control.
-- [ ] Configure CloudWatch logs, metrics, dashboards, and alarms.
-- [ ] Configure AWS Budgets and cost notifications.
+- [x] Create DynamoDB tables with encryption, TTL, and point-in-time recovery as needed. [`03-data.yaml`](infrastructure/03-data.yaml)
+- [x] Create least-privilege IAM deployment and App Runner instance roles. [`01-github-oidc.yaml`](infrastructure/01-github-oidc.yaml), [`04-backend.yaml`](infrastructure/04-backend.yaml)
+- [x] Create an Amazon ECR repository for the backend image. [`02-ecr.yaml`](infrastructure/02-ecr.yaml), with CVE scan on push and lifecycle expiry
+- [x] Create a private S3 bucket for the React production build. [`05-frontend.yaml`](infrastructure/05-frontend.yaml)
+- [x] Create a CloudFront distribution with S3 Origin Access Control. [`05-frontend.yaml`](infrastructure/05-frontend.yaml)
+- [x] Configure CloudWatch alarms. 5xx rate and p95 latency, with optional SNS email
+- [x] Enable access to the selected Amazon Bedrock model in the deployment Region. Documented as a prerequisite; the app runs fully without it
+- [x] ~~Store the external AQI API key in AWS Secrets Manager.~~ Not needed: Open-Meteo is keyless, so this deployment holds no secrets at all
+- [ ] Configure AWS Budgets and cost notifications. In the runbook, left to you so the alert reaches your own address
 
 #### Backend deployment
 
-- [ ] Create a small, production-safe Docker image for the Node.js API.
-- [ ] Build, test, scan, and push the image to Amazon ECR.
-- [ ] Deploy the image through AWS App Runner.
-- [ ] Configure the App Runner health check and automatic deployments.
-- [ ] Provide secrets and environment configuration without exposing values.
-- [ ] Restrict CORS to the deployed CloudFront frontend origin.
-- [ ] Verify DynamoDB, Bedrock, Secrets Manager, and CloudWatch permissions.
+- [x] Create a small, production-safe Docker image for the Node.js API. Multi-stage Alpine, non-root `node` user, `dumb-init` for signal handling, dev dependencies excluded
+- [x] Build, test, scan, and push the image to Amazon ECR. Tests gate the push; ECR scans on arrival
+- [x] Deploy the image through AWS App Runner. [`04-backend.yaml`](infrastructure/04-backend.yaml)
+- [x] Configure the App Runner health check and automatic deployments.
+- [x] Provide secrets and environment configuration without exposing values.
+- [x] Restrict CORS to the deployed CloudFront frontend origin. A stack output feeds the backend parameter directly
+- [x] Assign a least-privilege App Runner instance role. No `Scan`, no table administration, and `bedrock:InvokeModel` only when a model is configured
+- [ ] Verify DynamoDB, Bedrock, and CloudWatch permissions against a live account. Requires a real deployment
 
 #### Frontend deployment
 
-- [ ] Build the React application with the production API URL.
-- [ ] Upload content-hashed static files to the private S3 bucket.
-- [ ] Serve the application through CloudFront over HTTPS.
-- [ ] Configure the single-page application fallback without masking real asset errors.
-- [ ] Add an ACM certificate and Route 53 records if a custom domain is used.
-- [ ] Add AWS WAF rate-based and managed rules if the budget permits.
+- [x] Build the React application with the production API URL. The workflow fails the build if `localhost` is still in the bundle
+- [x] Upload content-hashed static files to the private S3 bucket. Assets first with a one-year cache, `index.html` last with no cache
+- [x] Serve the application through CloudFront over HTTPS. Plus HSTS, CSP, and frame-deny headers
+- [x] Configure the single-page application fallback without masking real asset errors. Verified locally on `/`, `/dashboard`, and an unknown path
+- [x] Add an ACM certificate and Route 53 records if a custom domain is used. Optional template parameters
+- [ ] Add AWS WAF rate-based and managed rules if the budget permits. Deferred: WAF carries a standing monthly cost and the API already rate-limits
 
 #### Automation and deployment verification
 
-- [ ] Add GitHub Actions for linting, type checking, tests, builds, and deployments.
-- [ ] Use GitHub OIDC for AWS deployment instead of long-lived AWS access keys.
-- [ ] Run deployed API integration tests and frontend smoke tests.
-- [ ] Verify HTTPS, CORS, cache headers, security headers, error handling, and log redaction.
-- [ ] Confirm that no API key, token, precise location, or health preference appears in client code or logs.
+- [x] Add GitHub Actions for linting, type checking, tests, builds, and deployments. Five CI jobs plus two gated deploy workflows
+- [x] Use GitHub OIDC for AWS deployment instead of long-lived AWS access keys. Role trust pinned to this repository's `main` branch
+- [x] Add a container smoke test to CI. CI starts the image and polls `/health`
+- [x] Add a repository-wide secret scan to CI. Gitleaks across full history
+- [x] Confirm that no API key, token, precise location, or health preference appears in client code or logs. Asserted by tests
+- [ ] Run deployed API integration tests and frontend smoke tests. Scripted in both deploy workflows; awaiting a real deployment
+- [ ] Verify HTTPS, CORS, cache headers, and security headers against the live distribution. Requires a real deployment
 
-**Phase 2 deliverable:** A secure public application with React delivered by S3 and CloudFront, Node.js running in App Runner, and data and GenAI features connected to DynamoDB and Bedrock.
+**Phase 2 deliverable: code complete, not yet applied.** Five CloudFormation templates pass `cfn-lint`, the container image builds, and three workflows pass structural validation. What remains is running the runbook against an AWS account, which I have deliberately not done on your behalf.
+
+One finding worth your attention: AWS moved **App Runner into maintenance mode on 31 March 2026** and closed it to new customers on 30 April 2026 ([AWS notice](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html)). You asked for App Runner and the template targets it, which works for accounts that already used the service. If yours did not, AWS directs new accounts to Amazon ECS Express Mode; only the compute service would change, and the container, registry, database, and frontend stacks stay exactly as they are.
 
 ### Phase 3: Product Polish, Validation, and Submission
 
@@ -451,18 +480,31 @@ Two things deliberately deferred rather than half-built:
 │   │   └── server.ts         # Listener and shutdown
 │   ├── tests/                # 113 Vitest tests
 │   └── .env.example
+│   ├── Dockerfile            # Multi-stage, non-root runtime
+│   └── .env.example
 ├── frontend/                 # React application
 │   ├── src/
-│   │   ├── components/       # Location, air quality, form, plan
-│   │   ├── test/             # Fetch stub and fixtures
+│   │   ├── routes/           # Landing, dashboard, not-found
+│   │   ├── components/       # Header, footer, location, air quality, form, plan
+│   │   ├── test/             # Fetch stub, fixtures, router helper
 │   │   ├── api.ts            # API client
 │   │   └── types.ts          # Contract types
-│   └── src/*.test.tsx        # 47 Vitest tests
+│   └── src/**/*.test.tsx     # 82 Vitest tests
+├── infrastructure/           # CloudFormation, deployed in numeric order
+│   ├── 01-github-oidc.yaml   # CI deployment role
+│   ├── 02-ecr.yaml           # Container registry
+│   ├── 03-data.yaml          # DynamoDB table
+│   ├── 04-backend.yaml       # App Runner, roles, alarms
+│   ├── 05-frontend.yaml      # S3, CloudFront, OAC, headers
+│   └── README.md             # Deployment runbook
+├── .github/workflows/
+│   ├── ci.yml                # Lint, typecheck, test, build, container, secrets
+│   ├── deploy-backend.yml    # Gated, manual
+│   └── deploy-frontend.yml   # Gated, manual
+├── .cfnlintrc.yaml
 ├── README.md
 └── .gitignore
 ```
-
-Planned for Phase 2: `infrastructure/` for infrastructure-as-code and `.github/workflows/` for CI/CD.
 
 ## Submission Checklist
 

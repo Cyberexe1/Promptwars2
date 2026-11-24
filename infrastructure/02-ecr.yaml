@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Container registry for the SmogWise API. Deployed before the App Runner
+  service, because App Runner requires an image to exist at creation time.
+
+Parameters:
+  RepositoryName:
+    Type: String
+    Default: smogwise-api
+
+  UntaggedImageRetentionDays:
+    Type: Number
+    Default: 7
+    MinValue: 1
+    MaxValue: 365
+
+  TaggedImageCount:
+    Type: Number
+    Description: How many tagged images to retain before expiring the oldest.
+    Default: 10
+    MinValue: 1
+
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    # Retained so a stack teardown cannot delete the image a running service
+    # depends on.
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      RepositoryName: !Ref RepositoryName
+      ImageTagMutability: MUTABLE
+      ImageScanningConfiguration:
+        # Scans every pushed image for known CVEs.
+        ScanOnPush: true
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: !Sub |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Expire untagged images",
+                "selection": {
+                  "tagStatus": "untagged",
+                  "countType": "sinceImagePushed",
+                  "countUnit": "days",
+                  "countNumber": ${UntaggedImageRetentionDays}
+                },
+                "action": { "type": "expire" }
+              },
+              {
+                "rulePriority": 2,
+                "description": "Keep only the most recent tagged images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": ${TaggedImageCount}
+                },
+                "action": { "type": "expire" }
+              }
+            ]
+          }
+
+Outputs:
+  RepositoryUri:
+    Value: !GetAtt Repository.RepositoryUri
+    Export:
+      Name: !Sub '${AWS::StackName}-RepositoryUri'
+
+  RepositoryName:
+    Value: !Ref Repository
+    Export:
+      Name: !Sub '${AWS::StackName}-RepositoryName'

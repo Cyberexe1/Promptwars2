@@ -1,4 +1,5 @@
 import { formatTimestamp, RISK_GLYPHS } from '../labels';
+import { AqiScale } from './AqiScale';
 import type { AirQualityResponse } from '../types';
 
 interface AirQualityPanelProps {
@@ -81,10 +82,14 @@ export function AirQualityPanel({ data }: AirQualityPanelProps) {
           <span className="band-glyph" aria-hidden="true">
             {RISK_GLYPHS[risk.level]}
           </span>
-          <strong className="band-label">{risk.label}</strong>
+          <strong className="band-label" data-risk={risk.level}>
+            {risk.label}
+          </strong>
           <p className="band-advice">{risk.advice}</p>
         </div>
       </div>
+
+      <AqiScale aqi={current.usAqi} level={risk.level} />
 
       <h3 className="pollutant-heading">Measured pollutants</h3>
       <dl className="pollutant-grid">

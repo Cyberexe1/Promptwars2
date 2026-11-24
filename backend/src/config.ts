@@ -1,6 +1,27 @@
 import { z } from 'zod';
 
 /**
+ * Loads `.env` for local development using Node's built-in reader, so no
+ * dotenv dependency is needed.
+ *
+ * Skipped under `test` to keep the suite hermetic, and a missing file is not an
+ * error: in production the platform supplies the environment directly, which is
+ * why App Runner needs no `.env` at all.
+ */
+function loadDotEnvForDevelopment(): void {
+  if (process.env.NODE_ENV === 'test') {
+    return;
+  }
+  try {
+    process.loadEnvFile();
+  } catch {
+    // No .env present. Defaults and real environment variables still apply.
+  }
+}
+
+loadDotEnvForDevelopment();
+
+/**
  * Environment configuration. Parsed once at startup so that a misconfigured
  * deployment fails immediately instead of at the first request.
  */

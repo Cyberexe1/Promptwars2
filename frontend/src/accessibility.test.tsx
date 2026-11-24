@@ -1,21 +1,44 @@
 import { describe, expect, it } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { axe } from 'vitest-axe';
 import App from './App';
+import { renderWithRouter } from './test/render';
 import { stubApi } from './test/server';
 
 /**
  * Automated accessibility checks.
  *
- * These catch structural problems such as unlabelled controls and broken
- * heading order. They do not replace manual keyboard and screen-reader
- * testing, which is listed in the project README as a Phase 3 task.
+ * These catch structural problems such as unlabelled controls, broken heading
+ * order, and missing landmarks. They do not replace manual keyboard and
+ * screen-reader testing, which is a Phase 3 task in the project README.
+ *
+ * Known gap: axe's colour-contrast rule needs a canvas, which jsdom does not
+ * implement, so contrast is not verified here.
  */
-describe('accessibility', () => {
-  it('has no detectable violations on first load', async () => {
+describe('landing page', () => {
+  it('has no detectable violations', async () => {
     stubApi();
-    const { container } = render(<App />);
+    const { container } = renderWithRouter(<App />, '/');
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
+  });
+
+  it('gives every section an accessible name', () => {
+    stubApi();
+    renderWithRouter(<App />, '/');
+
+    for (const region of screen.getAllByRole('region')) {
+      expect(region).toHaveAccessibleName();
+    }
+  });
+});
+
+describe('dashboard', () => {
+  it('has no detectable violations before any input', async () => {
+    stubApi();
+    const { container } = renderWithRouter(<App />, '/dashboard');
 
     const results = await axe(container);
     expect(results).toHaveNoViolations();
@@ -24,7 +47,7 @@ describe('accessibility', () => {
   it('has no detectable violations once a plan is shown', async () => {
     stubApi();
     const user = userEvent.setup();
-    const { container } = render(<App />);
+    const { container } = renderWithRouter(<App />, '/dashboard');
 
     await user.type(screen.getByLabelText(/search for a city/i), 'Delhi');
     await user.click(
@@ -40,7 +63,7 @@ describe('accessibility', () => {
 
   it('labels every form control', () => {
     stubApi();
-    render(<App />);
+    renderWithRouter(<App />, '/dashboard');
 
     const form = screen.getByRole('form', { name: /tell us about your household/i });
 
@@ -55,7 +78,7 @@ describe('accessibility', () => {
 
   it('groups related choices under a legend', () => {
     stubApi();
-    render(<App />);
+    renderWithRouter(<App />, '/dashboard');
 
     for (const legend of [
       /who lives with you/i,
@@ -67,18 +90,20 @@ describe('accessibility', () => {
     }
   });
 
-  it('exposes a single level-one heading and an ordered outline', () => {
+  it('exposes progress as text, not position alone', () => {
     stubApi();
-    render(<App />);
+    renderWithRouter(<App />, '/dashboard');
 
-    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
-    expect(screen.getAllByRole('heading', { level: 2 }).length).toBeGreaterThan(0);
+    const progress = screen.getByRole('navigation', { name: /progress/i });
+
+    expect(within(progress).getByText('Current step')).toBeInTheDocument();
+    expect(within(progress).getAllByText('To do')).toHaveLength(2);
   });
 
   it('announces status changes in a live region', async () => {
     stubApi();
     const user = userEvent.setup();
-    render(<App />);
+    renderWithRouter(<App />, '/dashboard');
 
     await user.type(screen.getByLabelText(/search for a city/i), 'Delhi');
     await user.click(
@@ -92,7 +117,7 @@ describe('accessibility', () => {
   it('moves focus in document order from the search field', async () => {
     stubApi();
     const user = userEvent.setup();
-    render(<App />);
+    renderWithRouter(<App />, '/dashboard');
 
     const search = screen.getByLabelText(/search for a city/i);
     search.focus();
@@ -107,7 +132,7 @@ describe('accessibility', () => {
   it('makes the submit button keyboard reachable once a location is chosen', async () => {
     stubApi();
     const user = userEvent.setup();
-    render(<App />);
+    renderWithRouter(<App />, '/dashboard');
 
     const submit = screen.getByRole('button', { name: /build my clean-air plan/i });
     // A disabled control is correctly skipped by the keyboard.
@@ -122,5 +147,15 @@ describe('accessibility', () => {
     expect(submit).toBeEnabled();
     submit.focus();
     expect(submit).toHaveFocus();
+  });
+});
+
+describe('not found page', () => {
+  it('has no detectable violations', async () => {
+    stubApi();
+    const { container } = renderWithRouter(<App />, '/missing');
+
+    const results = await axe(container);
+    expect(results).toHaveNoViolations();
   });
 });
