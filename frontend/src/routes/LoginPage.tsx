@@ -76,16 +76,17 @@ export function LoginPage() {
   }
 
   return (
-    <div className="shell section page-narrow">
-      <p className="eyebrow">{creating ? 'Create an account' : 'Sign in'}</p>
-      <h1>{creating ? 'Create your SmogWise account' : 'Sign in to SmogWise'}</h1>
-      <p className="lede">
-        {creating
-          ? 'An account lets you return to your dashboard and build a plan for your household.'
-          : 'Sign in to open your dashboard and build today’s plan.'}
-      </p>
+    <div className="focus-page">
+      <div className="focus-page-inner">
+        <p className="eyebrow">{creating ? 'Create an account' : 'Sign in'}</p>
+        <h1>{creating ? 'Create your SmogWise account' : 'Sign in to SmogWise'}</h1>
+        <p className="lede">
+          {creating
+            ? 'An account lets you return to your dashboard and build a plan for your household.'
+            : 'Sign in to open your dashboard and build today’s plan.'}
+        </p>
 
-      <form className="card auth-form" onSubmit={handleSubmit} noValidate>
+        <form className="card auth-form" onSubmit={handleSubmit} noValidate>
         <div className="field">
           <label htmlFor={emailId}>Email address</label>
           <input
@@ -158,11 +159,12 @@ export function LoginPage() {
         </p>
       </form>
 
-      <p className="hint auth-note">
-        We store only your email address and a hashed password. Your household
-        answers and saved plans never reach our server. See{' '}
-        <Link to="/privacy">how your data is handled</Link>.
-      </p>
+        <p className="hint auth-note">
+          We store only your email address and a hashed password. Your
+          household answers and saved plans never reach our server. See{' '}
+          <Link to="/privacy">how your data is handled</Link>.
+        </p>
+      </div>
     </div>
   );
 }

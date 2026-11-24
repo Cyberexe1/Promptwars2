@@ -36,8 +36,45 @@
 }
 
 /**
- * Standalone pages. Content is capped for readability but stays flush with
- * the header and footer, so navigating between pages causes no sideways jump.
+ * Focused single-task pages: sign-in, and the not-found recovery page.
+ *
+ * Centred, unlike the content pages. There is one thing to do here and no
+ * surrounding material to stay aligned with, so centring puts the task in the
+ * middle of the view instead of leaving it stranded against the left edge.
+ */
+.focus-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  /* Fills the space between header and footer without forcing a scrollbar. */
+  min-height: calc(100dvh - var(--header-height) - 16rem);
+  padding: var(--gap-xl) 1.25rem;
+  text-align: center;
+}
+
+.focus-page-inner {
+  width: 100%;
+  max-width: 28rem;
+}
+
+.focus-page h1 {
+  font-size: var(--text-3xl);
+}
+
+.focus-page .lede {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.focus-actions {
+  justify-content: center;
+  margin-top: var(--gap-lg);
+}
+
+/**
+ * Content pages. Capped for readability but flush with the header and footer,
+ * so moving between them causes no sideways jump.
  */
 .page-narrow {
   max-width: calc(var(--shell-narrow) + 2.5rem);
@@ -208,10 +245,12 @@
 /* ----- Auth form ----- */
 
 .auth-form {
-  max-width: 28rem;
   margin-top: var(--gap-lg);
+  margin-bottom: 0;
   padding: 1.75rem;
   box-shadow: var(--shadow);
+  /* Labels and fields read left-to-right even though the page is centred. */
+  text-align: left;
 }
 
 /* The submit button owns its row, so it is never mistaken for an inline
@@ -231,8 +270,8 @@
 }
 
 .auth-note {
-  max-width: 28rem;
   margin-top: var(--gap-md);
+  text-align: left;
 }
 
 /* A button, not a link: it changes mode in place rather than navigating. */
