@@ -33,6 +33,15 @@
 
   --focus: #0b3d91;
 
+  /* Text and surfaces used on top of the dark brand colour. */
+  --brand-abyss: #052731;
+  --on-brand: #eef6f8;
+  --on-brand-soft: #cfe3e9;
+  --on-brand-faint: #a9cbd4;
+
+  /* Moving highlight in the loading shimmer. */
+  --skeleton-highlight: #e4ebef;
+
   /* ----- Colour: risk bands, used beside text never instead of it ----- */
   --risk-good: #10614a;
   --risk-moderate: #78591f;
@@ -207,28 +216,84 @@ textarea {
   color: inherit;
 }
 
-input[type='search'],
-input[type='number'],
-input[type='text'] {
+/**
+ * Text-like fields.
+ *
+ * Defined by exclusion rather than by listing types. An allow-list silently
+ * leaves any new input type unstyled, which is exactly how the email and
+ * password fields ended up at the browser's default width.
+ */
+input:not(
+    [type='checkbox'],
+    [type='radio'],
+    [type='range'],
+    [type='file'],
+    [type='color'],
+    [type='submit'],
+    [type='button'],
+    [type='reset'],
+    [type='image'],
+    [type='hidden']
+  ),
+textarea,
+select {
   width: 100%;
   padding: 0.65rem 0.8rem;
   border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: var(--surface);
+  color: var(--ink);
   transition:
     border-color var(--dur-fast) var(--ease),
     box-shadow var(--dur-fast) var(--ease);
 }
 
-input[type='search']:hover,
-input[type='number']:hover {
+input:not(
+    [type='checkbox'],
+    [type='radio'],
+    [type='range'],
+    [type='file'],
+    [type='color'],
+    [type='submit'],
+    [type='button'],
+    [type='reset'],
+    [type='image'],
+    [type='hidden']
+  ):hover,
+textarea:hover,
+select:hover {
   border-color: var(--brand);
 }
 
-input[type='search']:focus,
-input[type='number']:focus {
+input:not(
+    [type='checkbox'],
+    [type='radio'],
+    [type='range'],
+    [type='file'],
+    [type='color'],
+    [type='submit'],
+    [type='button'],
+    [type='reset'],
+    [type='image'],
+    [type='hidden']
+  ):focus,
+textarea:focus,
+select:focus {
   border-color: var(--brand);
   box-shadow: 0 0 0 3px var(--brand-glow);
+}
+
+/* A number field has no business stretching the full width of a card. */
+input[type='number'] {
+  max-width: 10rem;
+}
+
+/* Autofill repaints the background, which can drop contrast below AA. */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--ink);
+  box-shadow: 0 0 0 100px var(--surface) inset;
 }
 
 fieldset {

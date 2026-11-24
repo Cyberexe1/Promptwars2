@@ -208,14 +208,31 @@
 /* ----- Auth form ----- */
 
 .auth-form {
-  max-width: 26rem;
+  max-width: 28rem;
   margin-top: var(--gap-lg);
+  padding: 1.75rem;
+  box-shadow: var(--shadow);
+}
+
+/* The submit button owns its row, so it is never mistaken for an inline
+   control next to the mode switch below it. */
+.auth-form .button-primary {
+  width: 100%;
+  margin-top: var(--gap-xs);
 }
 
 .auth-switch {
   margin: var(--gap-md) 0 0;
+  padding-top: var(--gap-md);
+  border-top: 1px solid var(--line);
   font-size: var(--text-base);
   color: var(--ink-soft);
+  text-align: center;
+}
+
+.auth-note {
+  max-width: 28rem;
+  margin-top: var(--gap-md);
 }
 
 /* A button, not a link: it changes mode in place rather than navigating. */

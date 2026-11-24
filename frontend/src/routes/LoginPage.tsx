@@ -158,7 +158,7 @@ export function LoginPage() {
         </p>
       </form>
 
-      <p className="hint">
+      <p className="hint auth-note">
         We store only your email address and a hashed password. Your household
         answers and saved plans never reach our server. See{' '}
         <Link to="/privacy">how your data is handled</Link>.

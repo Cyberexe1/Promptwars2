@@ -325,8 +325,12 @@
 /* ----- Closing call to action ----- */
 
 .cta {
-  background: linear-gradient(160deg, var(--brand-deep) 0%, #052731 100%);
-  color: #eef6f8;
+  background: linear-gradient(
+    160deg,
+    var(--brand-deep) 0%,
+    var(--brand-abyss) 100%
+  );
+  color: var(--on-brand);
   padding: var(--gap-2xl) 0;
 }
 
@@ -339,7 +343,7 @@
 }
 
 .cta p {
-  color: #cfe3e9;
+  color: var(--on-brand-soft);
 }
 
 .cta .button-row {
@@ -350,7 +354,7 @@
 .cta-note {
   margin: var(--gap-md) 0 0;
   font-size: var(--text-sm);
-  color: #a9cbd4;
+  color: var(--on-brand-faint);
 }
 
 @media (max-width: 62rem) {

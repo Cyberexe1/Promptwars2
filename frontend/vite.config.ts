@@ -17,5 +17,9 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     restoreMocks: true,
     clearMocks: true,
+    // Needed so `?raw` stylesheet imports resolve to their contents. With the
+    // default of false they resolve to an empty string, which would let the
+    // stylesheet guard tests pass without checking anything.
+    css: true,
   },
 });
