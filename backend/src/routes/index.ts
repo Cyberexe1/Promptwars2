@@ -53,6 +53,7 @@ apiRouter.get(
       risk,
       source: reading.source,
       stale: reading.stale,
+      ...(reading.outlook ? { outlook: reading.outlook } : {}),
     };
 
     res.json(body);

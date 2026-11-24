@@ -73,12 +73,27 @@ export interface RiskAssessment {
   escalatedForSensitivity: boolean;
 }
 
+/** One hour of the forecast series. */
+export interface HourlyReading {
+  time: string;
+  usAqi: number | null;
+}
+
+/** The next 24 hours, used to answer "when is the air cleanest today?". */
+export interface Outlook {
+  hours: HourlyReading[];
+  cleanestHour: string | null;
+  worstHour: string | null;
+}
+
 export interface AirQualityResponse {
   location: LocationInput;
   current: CurrentAirQuality;
   risk: RiskAssessment;
   source: DataSource;
   stale: boolean;
+  /** Absent when the provider returned no usable hourly series. */
+  outlook?: Outlook;
 }
 
 export type RecommendationCategory = 'routine' | 'indoor' | 'transport' | 'health';

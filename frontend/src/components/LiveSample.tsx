@@ -72,7 +72,7 @@ export function LiveSample() {
 
   return (
     <aside className="sample-card" aria-label="Example live reading">
-      <p className="sample-label">Live example, fetched just now</p>
+      <p className="sample-label">Live, fetched just now</p>
 
       <p className="sample-place">{SAMPLE_LOCATION.name}</p>
 

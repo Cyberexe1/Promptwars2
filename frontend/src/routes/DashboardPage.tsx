@@ -171,14 +171,17 @@ export function DashboardPage() {
 
   return (
     <div className="shell dashboard">
-      <header className="dashboard-head">
+      {/* A div, not a header: nested <header> elements are both reported as
+          role="banner" by the test tooling, and the h1 already carries the
+          structure here. */}
+      <div className="dashboard-head">
         <p className="eyebrow">Dashboard</p>
         <h1>Build today&rsquo;s clean-air plan</h1>
         <p className="lede">
           Pick a location for a live reading, then add a few details about your
           household to get steps you can act on today.
         </p>
-      </header>
+      </div>
 
       <StepIndicator current={currentStep} completed={completed} />
 

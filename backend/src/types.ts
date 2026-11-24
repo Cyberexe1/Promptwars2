@@ -86,6 +86,27 @@ export interface RiskAssessment {
   escalatedForSensitivity: boolean;
 }
 
+/** One hour of the forecast series. */
+export interface HourlyReading {
+  /** ISO 8601 UTC timestamp for the top of the hour. */
+  time: string;
+  usAqi: number | null;
+}
+
+/**
+ * The next 24 hours, used to answer "when is the air cleanest today?".
+ *
+ * This exists because the plan's central advice is to move outdoor time away
+ * from the pollution peak, which is unusable without knowing when the peak is.
+ */
+export interface Outlook {
+  hours: HourlyReading[];
+  /** ISO time of the lowest-AQI hour in the usable window, if any. */
+  cleanestHour: string | null;
+  /** ISO time of the highest-AQI hour in the usable window, if any. */
+  worstHour: string | null;
+}
+
 export interface AirQualityResponse {
   location: LocationInput;
   current: CurrentAirQuality;
@@ -93,6 +114,8 @@ export interface AirQualityResponse {
   source: DataSource;
   /** True when the observation is older than the freshness window. */
   stale: boolean;
+  /** Absent when the provider returned no usable hourly series. */
+  outlook?: Outlook;
 }
 
 export type RecommendationCategory = 'routine' | 'indoor' | 'transport' | 'health';

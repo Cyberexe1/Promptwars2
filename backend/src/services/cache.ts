@@ -8,7 +8,7 @@ import {
 } from '@aws-sdk/lib-dynamodb';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
-import type { CurrentAirQuality, DataSource } from '../types.js';
+import type { CurrentAirQuality, DataSource, Outlook } from '../types.js';
 
 /**
  * Air-quality reading cache.
@@ -26,6 +26,12 @@ import type { CurrentAirQuality, DataSource } from '../types.js';
 export interface CachedReading {
   current: CurrentAirQuality;
   source: DataSource;
+  /**
+   * Cached alongside the reading because it comes from the same upstream call.
+   * The entry lifetime is far shorter than the one-hour buckets it contains,
+   * so a cached outlook can be at most a partial hour out of date.
+   */
+  outlook?: Outlook;
 }
 
 export interface AirQualityCache {
@@ -144,6 +150,7 @@ export class DynamoDbAirQualityCache implements AirQualityCache {
       return {
         current: item.current as CurrentAirQuality,
         source: item.source as DataSource,
+        ...(item.outlook ? { outlook: item.outlook as Outlook } : {}),
       };
     } catch (error) {
       logger.warn('aqi_cache_read_failed', {
@@ -163,6 +170,7 @@ export class DynamoDbAirQualityCache implements AirQualityCache {
             sk: 'AQI#CURRENT',
             current: value.current,
             source: value.source,
+            ...(value.outlook ? { outlook: value.outlook } : {}),
             // TTL attribute must be epoch seconds.
             expiresAt: Math.floor(this.now() / 1000) + this.ttlSeconds,
           },

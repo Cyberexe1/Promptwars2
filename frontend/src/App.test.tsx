@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import App from './App';
 import { renderWithRouter } from './test/render';
@@ -42,7 +42,11 @@ describe('routing', () => {
     const user = userEvent.setup();
     renderWithRouter(<App />, '/dashboard');
 
-    await user.click(screen.getByRole('link', { name: /smogwise home/i }));
+    // Scoped to the banner: the footer carries its own brand link.
+    const header = screen.getByRole('banner');
+    await user.click(
+      within(header).getByRole('link', { name: /smogwise home/i }),
+    );
 
     expect(
       await screen.findByRole('heading', { level: 1, name: /what today.s air means/i }),
@@ -76,14 +80,34 @@ describe('shell', () => {
     stubApi();
     renderWithRouter(<App />, '/dashboard');
 
+    // The footer links to the same routes, so these queries are scoped to the
+    // main navigation.
     const nav = screen.getByRole('navigation', { name: 'Main' });
-    const active = screen.getByRole('link', { name: 'Dashboard' });
+    const active = within(nav).getByRole('link', { name: 'Dashboard' });
 
-    expect(nav).toContainElement(active);
     expect(active).toHaveAttribute('aria-current', 'page');
-    expect(screen.getByRole('link', { name: 'Home' })).not.toHaveAttribute(
-      'aria-current',
-    );
+    expect(
+      within(nav).getByRole('link', { name: 'Home' }),
+    ).not.toHaveAttribute('aria-current');
+  });
+
+  it('offers the call to action only where it is not redundant', () => {
+    stubApi();
+    const { unmount } = renderWithRouter(<App />, '/');
+    const header = screen.getByRole('banner');
+
+    expect(
+      within(header).getByRole('link', { name: /check my air/i }),
+    ).toBeInTheDocument();
+    unmount();
+
+    stubApi();
+    renderWithRouter(<App />, '/dashboard');
+    expect(
+      within(screen.getByRole('banner')).queryByRole('link', {
+        name: /check my air/i,
+      }),
+    ).not.toBeInTheDocument();
   });
 
   it('exposes a single main landmark that the skip link targets', () => {

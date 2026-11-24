@@ -1,0 +1,27 @@
+/** Privacy page: definition list of what the app handles. */
+
+.privacy-list {
+  display: grid;
+  gap: 0;
+}
+
+.privacy-list dt {
+  margin-top: var(--gap-md);
+  padding-top: var(--gap-md);
+  border-top: 1px solid var(--line);
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-lg);
+  color: var(--ink);
+}
+
+.privacy-list dt:first-child {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
+
+.privacy-list dd {
+  margin-top: var(--gap-xs);
+  color: var(--ink-soft);
+  font-size: var(--text-base);
+}

@@ -106,16 +106,18 @@ SmogWise uses a hybrid approach so that safety does not depend only on a languag
 
 ## Current Status
 
-**All three phases are code complete.** 265 tests pass, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the container image builds. What remains needs your AWS account and a camera: the live deployment, a manual screen-reader pass, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
+**All three phases are code complete.** 324 tests pass, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the container image builds. What remains needs your AWS account and a camera: the live deployment, a manual screen-reader pass, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
 
 | Area | State |
 |---|---|
-| Landing page | Built, with a live example reading |
-| Dashboard | Built, three-step progress indicator |
+| Landing page | Built, with a framed live product preview |
+| Dashboard | Built, three-step indicator, stat cards, 24-hour outlook chart |
+| Privacy page | Built, every claim linked to the code behind it |
 | Saved plans | Built, device-local with user-controlled deletion |
 | Community checklist | Built, household and health details stripped |
-| React frontend | 126 tests passing |
-| Node.js API | 139 tests passing |
+| React frontend | 169 tests passing |
+| Node.js API | 155 tests passing |
+| 24-hour outlook | Names the cleanest and worst hours ahead, so "shift your outdoor time" is actionable |
 | Live air-quality data | Working against Open-Meteo, no API key required |
 | Risk and recommendation rules | Complete, verified over 1,000+ household and band combinations |
 | Amazon Bedrock | Integrated with schema validation and a safe fallback; disabled until a model id is configured |
@@ -183,7 +185,8 @@ The same checks run in CI on every push, across eight jobs that add Trivy image 
 | Route | Purpose |
 |---|---|
 | `/` | Landing page: what the product does, how it works, a live example reading, and the safety model |
-| `/dashboard` | The working tool: location, household details, and the generated plan |
+| `/dashboard` | The working tool: location, household details, 24-hour outlook, and the generated plan |
+| `/privacy` | What the app does with each piece of data, with links to the code that backs each claim |
 
 Client-side routing means a deep link such as `/dashboard` is not a file in S3. CloudFront is configured to serve the app shell for 403 and 404 so React Router can render the route. That trade-off and its mitigation are documented in [`infrastructure/05-frontend.yaml`](infrastructure/05-frontend.yaml).
 

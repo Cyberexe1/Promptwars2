@@ -121,7 +121,25 @@ export function LandingPage() {
             </ul>
           </div>
 
-          <LiveSample />
+          {/* A framed window around the real live reading, so the preview is
+              the actual product rather than a mocked screenshot. */}
+          <div className="preview">
+            <div className="preview-frame">
+              <div className="preview-bar" aria-hidden="true">
+                <span className="preview-dot" />
+                <span className="preview-dot" />
+                <span className="preview-dot" />
+                <p className="preview-label">smogwise / dashboard</p>
+              </div>
+              <div className="preview-body">
+                <LiveSample />
+              </div>
+            </div>
+            <p className="preview-caption">
+              Not a mockup. This is the live reading, fetched when you loaded
+              the page.
+            </p>
+          </div>
         </div>
       </section>
 
@@ -156,8 +174,10 @@ export function LandingPage() {
         aria-labelledby="how-it-works-heading"
       >
         <div className="shell">
-          <p className="eyebrow">How it works</p>
-          <h2 id="how-it-works-heading">Four steps, about a minute</h2>
+          <div className="section-head">
+            <p className="eyebrow">How it works</p>
+            <h2 id="how-it-works-heading">Four steps, about a minute</h2>
+          </div>
 
           <ol className="steps">
             {STEPS.map((step, index) => (
@@ -181,8 +201,10 @@ export function LandingPage() {
         aria-labelledby="features-heading"
       >
         <div className="shell">
-          <p className="eyebrow">What you get</p>
-          <h2 id="features-heading">Advice across the whole day</h2>
+          <div className="section-head">
+            <p className="eyebrow">What you get</p>
+            <h2 id="features-heading">Advice across the whole day</h2>
+          </div>
 
           <div className="feature-grid">
             {FEATURES.map((feature) => (
@@ -202,8 +224,12 @@ export function LandingPage() {
 
       <section className="section" aria-labelledby="trust-heading">
         <div className="shell">
-          <p className="eyebrow">Why you can trust it</p>
-          <h2 id="trust-heading">The safety decisions are not left to the model</h2>
+          <div className="section-head">
+            <p className="eyebrow">Why you can trust it</p>
+            <h2 id="trust-heading">
+              The safety decisions are not left to the model
+            </h2>
+          </div>
 
           <div className="trust-grid">
             <article className="panel">
@@ -252,8 +278,10 @@ export function LandingPage() {
         aria-labelledby="audience-heading"
       >
         <div className="shell">
-          <p className="eyebrow">Who it is for</p>
-          <h2 id="audience-heading">Tuned to the people most affected</h2>
+          <div className="section-head">
+            <p className="eyebrow">Who it is for</p>
+            <h2 id="audience-heading">Tuned to the people most affected</h2>
+          </div>
 
           <div className="audience-grid">
             {AUDIENCES.map((audience) => (

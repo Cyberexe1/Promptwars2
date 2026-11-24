@@ -1,5 +1,6 @@
 import { formatTimestamp, RISK_GLYPHS } from '../labels';
 import { AqiScale } from './AqiScale';
+import { OutlookChart } from './OutlookChart';
 import type { AirQualityResponse } from '../types';
 
 interface AirQualityPanelProps {
@@ -14,13 +15,13 @@ interface Pollutant {
 }
 
 /**
- * Current conditions.
+ * Current conditions, the pollutants behind them, and the next 24 hours.
  *
  * The severity band is stated in words and repeated as a dot glyph, so the
  * reading never depends on colour alone.
  */
 export function AirQualityPanel({ data }: AirQualityPanelProps) {
-  const { current, risk, source, stale } = data;
+  const { current, risk, source, stale, outlook } = data;
 
   const pollutants: Pollutant[] = [
     {
@@ -33,13 +34,13 @@ export function AirQualityPanel({ data }: AirQualityPanelProps) {
       label: 'PM10',
       value: current.pm10,
       unit: 'µg/m³',
-      description: 'Coarser dust and smoke particles',
+      description: 'Coarser dust and smoke',
     },
     {
       label: 'Nitrogen dioxide',
       value: current.nitrogenDioxide,
       unit: 'µg/m³',
-      description: 'Mainly from traffic and combustion',
+      description: 'Mainly traffic and combustion',
     },
     {
       label: 'Ozone',
@@ -55,7 +56,10 @@ export function AirQualityPanel({ data }: AirQualityPanelProps) {
       aria-labelledby="air-quality-heading"
       data-risk={risk.level}
     >
-      <h2 id="air-quality-heading">Air quality in {data.location.name}</h2>
+      <div className="card-head">
+        <h2 id="air-quality-heading">Air quality in {data.location.name}</h2>
+        <p className="hint">Observed {formatTimestamp(current.observedAt)}</p>
+      </div>
 
       {stale && (
         <p className="alert alert-warning" role="status">
@@ -65,7 +69,7 @@ export function AirQualityPanel({ data }: AirQualityPanelProps) {
       )}
 
       <div className="reading">
-        <div className="reading-value">
+        <div className="reading-value" data-risk={risk.level}>
           <span className="reading-number">
             {current.usAqi ?? current.europeanAqi ?? '—'}
           </span>
@@ -91,28 +95,35 @@ export function AirQualityPanel({ data }: AirQualityPanelProps) {
 
       <AqiScale aqi={current.usAqi} level={risk.level} />
 
-      <h3 className="pollutant-heading">Measured pollutants</h3>
-      <dl className="pollutant-grid">
+      {outlook && (
+        <>
+          <h3 className="section-label">Next 24 hours</h3>
+          <OutlookChart outlook={outlook} />
+        </>
+      )}
+
+      <h3 className="section-label">Measured pollutants</h3>
+      <dl className="stat-grid">
         {pollutants.map((pollutant) => (
-          <div key={pollutant.label} className="pollutant">
+          <div key={pollutant.label} className="stat">
             <dt>{pollutant.label}</dt>
             <dd>
               {pollutant.value === null ? (
-                <span className="pollutant-missing">Not reported here</span>
+                <span className="stat-missing">Not reported here</span>
               ) : (
-                <>
+                <span className="stat-value">
                   {pollutant.value}
-                  <span className="pollutant-unit"> {pollutant.unit}</span>
-                </>
+                  <span className="stat-unit"> {pollutant.unit}</span>
+                </span>
               )}
-              <span className="pollutant-description">{pollutant.description}</span>
+              <span className="stat-note">{pollutant.description}</span>
             </dd>
           </div>
         ))}
       </dl>
 
       <p className="provenance">
-        Observed {formatTimestamp(current.observedAt)}. Source:{' '}
+        Source:{' '}
         <a href={source.url} target="_blank" rel="noreferrer noopener">
           {source.name}
         </a>

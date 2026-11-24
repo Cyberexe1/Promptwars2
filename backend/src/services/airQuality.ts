@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { config } from '../config.js';
 import { fetchJson } from './httpClient.js';
 import { cacheKeyFor, getAirQualityCache } from './cache.js';
+import { buildOutlook } from '../domain/outlook.js';
 import { upstreamUnavailable } from '../utils/errors.js';
-import type { CurrentAirQuality, DataSource } from '../types.js';
+import type { CurrentAirQuality, DataSource, Outlook } from '../types.js';
 
 /**
  * Current air quality via the Open-Meteo Air Quality API, which needs no API key.
@@ -35,6 +36,14 @@ const airQualityResponseSchema = z.object({
     nitrogen_dioxide: measurement,
     ozone: measurement,
   }),
+  // Optional: the outlook is a enhancement, so a provider that omits the
+  // hourly series must still yield a usable current reading.
+  hourly: z
+    .object({
+      time: z.array(z.number()),
+      us_aqi: z.array(measurement).optional(),
+    })
+    .optional(),
 });
 
 /** Readings older than this are flagged to the user as stale. */
@@ -47,6 +56,7 @@ export interface AirQualityReading {
   current: CurrentAirQuality;
   source: DataSource;
   stale: boolean;
+  outlook?: Outlook;
 }
 
 function normalise(value: number | null | undefined): number | null {
@@ -85,6 +95,7 @@ export async function getCurrentAirQuality(
         // Staleness depends on the current time, so it is recomputed on every
         // read rather than stored.
         stale: isStale(cached.current.observedAt),
+        ...(cached.outlook ? { outlook: cached.outlook } : {}),
       };
     }
   }
@@ -93,6 +104,10 @@ export async function getCurrentAirQuality(
   url.searchParams.set('latitude', String(latitude));
   url.searchParams.set('longitude', String(longitude));
   url.searchParams.set('current', CURRENT_VARIABLES.join(','));
+  // Hourly AQI powers the "cleanest hour today" outlook. Two forecast days
+  // cover a full 24 hours regardless of the local time of the request.
+  url.searchParams.set('hourly', 'us_aqi');
+  url.searchParams.set('forecast_days', '2');
   url.searchParams.set('timeformat', 'unixtime');
 
   const raw = await fetchJson(url.toString(), {
@@ -126,15 +141,21 @@ export async function getCurrentAirQuality(
     retrievedAt: new Date().toISOString(),
   };
 
+  const hourly = parsed.data.hourly;
+  const outlook = hourly
+    ? buildOutlook({ time: hourly.time, usAqi: hourly.us_aqi ?? [] })
+    : undefined;
+
   if (config.aqiCacheTtlSeconds > 0) {
     // Not awaited for correctness: a cache write must never delay or fail the
     // response the user is waiting for.
-    void cache.put(cacheKey, { current, source });
+    void cache.put(cacheKey, { current, source, ...(outlook ? { outlook } : {}) });
   }
 
   return {
     current,
     source,
     stale: isStale(observedAt),
+    ...(outlook ? { outlook } : {}),
   };
 }

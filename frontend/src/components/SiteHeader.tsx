@@ -1,29 +1,27 @@
-import { Link, NavLink } from 'react-router-dom';
+import { Link, NavLink, useLocation } from 'react-router-dom';
+import { BrandMark } from './BrandMark';
 
 /**
- * Site header with the primary navigation.
+ * Global header.
  *
  * `NavLink` sets `aria-current="page"` on the active route, so the current
- * location is exposed to assistive technology and not signalled by styling
- * alone.
+ * location is exposed to assistive technology rather than signalled by
+ * styling alone.
+ *
+ * There is no mobile menu by design: two destinations and one action fit a
+ * narrow viewport, so a hamburger would hide the navigation behind an extra
+ * tap for no gain. There is also no account menu, because the app has no
+ * accounts.
  */
 export function SiteHeader() {
+  const { pathname } = useLocation();
+  const onDashboard = pathname.startsWith('/dashboard');
+
   return (
     <header className="site-header">
       <div className="shell site-header-inner">
         <Link to="/" className="brand" aria-label="SmogWise home">
-          <span className="brand-mark" aria-hidden="true">
-            <svg viewBox="0 0 24 24" width="22" height="22" focusable="false">
-              <circle cx="12" cy="8.5" r="4.5" fill="currentColor" />
-              <path
-                d="M4 15.5h16M6 19.5h12"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                opacity="0.55"
-              />
-            </svg>
-          </span>
+          <BrandMark />
           <span className="brand-word">SmogWise</span>
         </Link>
 
@@ -39,8 +37,21 @@ export function SiteHeader() {
                 Dashboard
               </NavLink>
             </li>
+            <li>
+              <NavLink to="/privacy" className="site-nav-link">
+                Privacy
+              </NavLink>
+            </li>
           </ul>
         </nav>
+
+        {/* The call to action is redundant once the user is on the dashboard,
+            so it gives its space back instead of repeating itself. */}
+        {!onDashboard && (
+          <Link to="/dashboard" className="button button-primary header-cta">
+            Check my air
+          </Link>
+        )}
       </div>
     </header>
   );

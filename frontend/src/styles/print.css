@@ -1,0 +1,53 @@
+/**
+ * Print styles.
+ *
+ * The plan is the thing worth printing: a household can pin it up or carry it.
+ * Navigation, forms, and controls are removed, and cards are kept whole.
+ */
+
+@media print {
+  .site-header,
+  .skip-link,
+  .stepper,
+  .dashboard-head .lede,
+  form.card,
+  .cta,
+  .result-list,
+  .button,
+  .button-row,
+  .saved-list,
+  .confirm-row,
+  .chart-legend {
+    display: none !important;
+  }
+
+  .app {
+    min-height: auto;
+  }
+
+  body {
+    background: #ffffff;
+    font-size: 11pt;
+  }
+
+  .card,
+  .recommendation,
+  .community-item,
+  .step {
+    box-shadow: none;
+    border: 1px solid #999;
+    break-inside: avoid;
+  }
+
+  .plan-group {
+    break-before: auto;
+  }
+
+  /* Printed links are useless without their target. */
+  .provenance a::after,
+  .community-meta a::after {
+    content: ' (' attr(href) ')';
+    font-size: 9pt;
+    word-break: break-all;
+  }
+}

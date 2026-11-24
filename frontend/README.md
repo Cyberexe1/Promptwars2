@@ -30,15 +30,38 @@ VITE_API_URL=http://localhost:3000
 
 | Path | Purpose |
 |---|---|
-| `src/App.tsx` | Page composition and request orchestration |
+| `src/App.tsx` | Routing shell: skip link, header, `main`, footer |
+| `src/routes/` | `LandingPage`, `DashboardPage`, `PrivacyPage`, `NotFoundPage` |
 | `src/api.ts` | API client with typed errors and offline detection |
 | `src/types.ts` | Contract types mirroring `backend/src/types.ts` |
 | `src/labels.ts` | Human-readable text for every coded value |
-| `src/defaults.ts` | Starting household profile |
+| `src/bands.ts` | AQI to band, for the hourly series only |
+| `src/storage.ts` | Device-local saved plans |
+| `src/community.ts` | Shareable checklist, household data stripped |
+| `src/components/OutlookChart.tsx` | 24-hour forecast, with an accessible data table |
+| `src/components/AirQualityPanel.tsx` | Reading, band, outlook, pollutant stat cards |
 | `src/components/LocationPicker.tsx` | Debounced city search and geolocation |
-| `src/components/AirQualityPanel.tsx` | Reading, band, pollutants, provenance |
 | `src/components/ProfileForm.tsx` | Household details |
 | `src/components/RecommendationList.tsx` | The generated plan |
+
+### Styling
+
+Design tokens live in `src/index.css`: a 1.2-ratio type scale, a 4px spacing
+scale, four elevation levels, and motion durations. `src/App.css` is an entry
+point that imports `src/styles/` in cascade order, split by concern so no
+single stylesheet grows unmanageable:
+
+| Stylesheet | Covers |
+|---|---|
+| `layout.css` | Shell, containers, header, footer |
+| `ui.css` | Buttons, cards, alerts, form choices, tags, skeletons |
+| `landing.css` | Hero, product preview, steps, features, call to action |
+| `dashboard.css` | Stepper, reading, stat cards, chart, plan, saved, community |
+| `privacy.css` | Privacy page definition list |
+| `print.css` | Printable plan: navigation and controls removed |
+
+Every spacing, size, radius, shadow, and duration references a token. There are
+no raw hex colours or one-off durations outside `index.css`.
 
 ### State handling
 
@@ -70,9 +93,17 @@ One limitation worth stating plainly: axe's colour-contrast rule needs a canvas,
 
 | File | Covers |
 |---|---|
-| `src/App.test.tsx` | Search debouncing, selection to reading, plan generation and payload, error and offline states, validation, geolocation grant and refusal |
-| `src/api.test.ts` | Query encoding, request shape, error mapping, and that no credentials are ever attached |
-| `src/accessibility.test.tsx` | axe scans and structural accessibility assertions |
+| `src/App.test.tsx` | Routing, active-route marking, skip link, conditional header CTA |
+| `src/routes/DashboardPage.test.tsx` | Search debouncing, selection to reading, plan generation and payload, save and delete, community checklist, errors, offline, geolocation |
+| `src/routes/LandingPage.test.tsx` | Section content, calls to action, live sample success and failure |
+| `src/routes/PrivacyPage.test.tsx` | Claims present, axe clean, makes no network request |
+| `src/components/OutlookChart.test.tsx` | Scaling, band colouring, gaps, markers, accessible table |
+| `src/components/SiteFooter.test.tsx` | Column headings, no dead or placeholder links, `noreferrer` on external links |
+| `src/bands.test.ts` | Band boundaries, kept identical to the backend |
+| `src/storage.test.ts` | Save, list, delete, quota failure, damaged storage |
+| `src/community.test.ts` | What the shareable checklist excludes |
+| `src/api.test.ts` | Query encoding, request shape, error mapping, no credentials attached |
+| `src/accessibility.test.tsx` | axe scans per route and structural assertions |
 
 ## Privacy
 
