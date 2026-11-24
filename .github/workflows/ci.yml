@@ -133,3 +133,58 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependencies:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      # Fails on high and critical advisories. Moderate and below are
+      # reported without blocking, so a transitive dev-only advisory cannot
+      # stop a deployment on its own.
+      - name: Audit ${{ matrix.project }}
+        working-directory: ${{ matrix.project }}
+        run: npm audit --audit-level=high
+
+      - name: Report all advisories for visibility
+        if: always()
+        working-directory: ${{ matrix.project }}
+        run: npm audit || true
+
+  image-scan:
+    name: Container vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: false
+          load: true
+          tags: smogwise-api:scan
+          cache-from: type=gha
+
+      - name: Scan the image with Trivy
+        uses: aquasecurity/trivy-action@0.33.1
+        with:
+          image-ref: smogwise-api:scan
+          format: table
+          severity: HIGH,CRITICAL
+          # Fail the build on a fixable high or critical finding. Issues with
+          # no available fix are reported but do not block, since there is
+          # nothing actionable to do about them.
+          ignore-unfixed: true
+          exit-code: '1'

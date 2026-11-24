@@ -1043,6 +1043,133 @@
   margin: 0;
 }
 
+/* ----- Buttons in rows ----- */
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap-sm);
+}
+
+.button-danger {
+  background: var(--surface);
+  color: var(--error);
+  border-color: var(--error);
+}
+
+.button-danger:hover:not(:disabled) {
+  background: var(--error);
+  color: #ffffff;
+}
+
+/* ----- Community checklist ----- */
+
+.community-meta {
+  padding: 0.9rem 1rem;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--gap);
+}
+
+.community-meta p:last-child {
+  margin-bottom: 0;
+}
+
+.community-list {
+  display: grid;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap);
+  counter-reset: community;
+}
+
+.community-item {
+  position: relative;
+  padding: 0.9rem 1rem 0.9rem 2.8rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  counter-increment: community;
+}
+
+.community-item::before {
+  content: counter(community);
+  position: absolute;
+  left: 0.9rem;
+  top: 0.95rem;
+  display: grid;
+  place-items: center;
+  width: 1.4rem;
+  height: 1.4rem;
+  border-radius: 50%;
+  background: var(--brand-tint);
+  color: var(--brand-deep);
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.community-item h3 {
+  font-size: 1rem;
+  margin-bottom: 0.2rem;
+}
+
+.community-item p {
+  margin-bottom: 0.3rem;
+  font-size: 0.9375rem;
+}
+
+.community-effect {
+  margin-bottom: 0;
+  color: var(--ink-soft);
+}
+
+.community-effect-label {
+  font-weight: 650;
+  color: var(--ink);
+}
+
+/* ----- Saved plans ----- */
+
+.saved-list {
+  display: grid;
+  gap: var(--gap-sm);
+  margin-bottom: var(--gap);
+}
+
+.saved-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap-sm);
+  padding: 0.8rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.saved-text {
+  min-width: 0;
+}
+
+.saved-place {
+  margin: 0;
+  font-weight: 650;
+}
+
+.saved-item .hint {
+  margin: 0;
+}
+
+.confirm-row {
+  padding: 1rem;
+  border: 1px solid var(--error);
+  border-radius: var(--radius-sm);
+  background: var(--error-bg);
+}
+
+.confirm-text {
+  font-weight: 650;
+  color: #5f1011;
+}
+
 /* ----- Footer ----- */
 
 .site-footer {
@@ -1109,7 +1236,11 @@
   .dashboard-head .lede,
   form.card,
   .cta,
-  .result-list {
+  .result-list,
+  .button,
+  .button-row,
+  .saved-list,
+  .confirm-row {
     display: none !important;
   }
 

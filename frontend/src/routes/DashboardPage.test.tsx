@@ -1,10 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DashboardPage } from './DashboardPage';
 import { AIR_QUALITY, PLAN } from '../test/fixtures';
 import { renderWithRouter } from '../test/render';
 import { errorResponse, jsonResponse, stubApi } from '../test/server';
+
+beforeEach(() => {
+  window.localStorage.clear();
+});
 
 function renderDashboard() {
   return renderWithRouter(<DashboardPage />, '/dashboard');
@@ -434,6 +438,261 @@ describe('profile validation', () => {
     await user.click(screen.getByRole('button', { name: /build my clean-air plan/i }));
 
     expect(await screen.findByText(/between 0 and 480/i)).toBeInTheDocument();
+  });
+});
+
+describe('saving and deleting plans', () => {
+  it('shows no saved section before anything is saved', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+    await screen.findByRole('region', { name: /your clean-air plan/i });
+
+    expect(
+      screen.queryByRole('region', { name: /your saved plans/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('saves a plan and lists it with its location and band', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+    await screen.findByRole('region', { name: /your clean-air plan/i });
+
+    await user.click(screen.getByRole('button', { name: /save this plan/i }));
+
+    const saved = await screen.findByRole('region', { name: /your saved plans/i });
+    expect(within(saved).getByText('Delhi, Delhi, India')).toBeInTheDocument();
+    expect(within(saved).getByText(/US AQI 183/)).toBeInTheDocument();
+    expect(await screen.findByText(/plan saved to this browser/i)).toBeInTheDocument();
+  });
+
+  it('persists the saved plan in local storage, not on a server', async () => {
+    const fetchMock = stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+    await screen.findByRole('region', { name: /your clean-air plan/i });
+
+    const callsBefore = fetchMock.mock.calls.length;
+    await user.click(screen.getByRole('button', { name: /save this plan/i }));
+    await screen.findByRole('region', { name: /your saved plans/i });
+
+    // Saving must not produce a network request of any kind.
+    expect(fetchMock.mock.calls).toHaveLength(callsBefore);
+    expect(window.localStorage.getItem('smogwise.savedPlans.v1')).toContain(
+      'Delhi',
+    );
+  });
+
+  it('deletes a single saved plan', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+    await screen.findByRole('region', { name: /your clean-air plan/i });
+    await user.click(screen.getByRole('button', { name: /save this plan/i }));
+
+    const saved = await screen.findByRole('region', { name: /your saved plans/i });
+    // Scoped to the entry itself, so this cannot match "Delete all saved plans".
+    const entry = within(saved).getByRole('listitem');
+    await user.click(within(entry).getByRole('button'));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('region', { name: /your saved plans/i }),
+      ).not.toBeInTheDocument();
+    });
+    expect(window.localStorage.getItem('smogwise.savedPlans.v1')).not.toContain(
+      'Delhi',
+    );
+  });
+
+  it('asks for confirmation before deleting everything', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+    await screen.findByRole('region', { name: /your clean-air plan/i });
+    await user.click(screen.getByRole('button', { name: /save this plan/i }));
+
+    const saved = await screen.findByRole('region', { name: /your saved plans/i });
+    await user.click(
+      within(saved).getByRole('button', { name: /delete all saved plans/i }),
+    );
+
+    expect(screen.getByText(/cannot be undone/i)).toBeInTheDocument();
+
+    // Backing out must leave the data intact.
+    await user.click(screen.getByRole('button', { name: /keep them/i }));
+    expect(
+      within(saved).getByText('Delhi, Delhi, India'),
+    ).toBeInTheDocument();
+  });
+
+  it('deletes everything once confirmed', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+    await screen.findByRole('region', { name: /your clean-air plan/i });
+    await user.click(screen.getByRole('button', { name: /save this plan/i }));
+
+    const saved = await screen.findByRole('region', { name: /your saved plans/i });
+    await user.click(
+      within(saved).getByRole('button', { name: /delete all saved plans/i }),
+    );
+    await user.click(
+      screen.getByRole('button', { name: /yes, delete everything/i }),
+    );
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole('region', { name: /your saved plans/i }),
+      ).not.toBeInTheDocument();
+    });
+    expect(window.localStorage.length).toBe(0);
+  });
+
+  it('explains instead of offering a dead button when storage is blocked', async () => {
+    vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+      throw new DOMException('denied', 'SecurityError');
+    });
+    stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+    await screen.findByRole('region', { name: /your clean-air plan/i });
+
+    expect(screen.getByText(/blocking local storage/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /save this plan/i }),
+    ).not.toBeInTheDocument();
+  });
+});
+
+describe('community checklist', () => {
+  it('appears alongside the plan and names the location and public band', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+
+    const community = await screen.findByRole('region', {
+      name: /share with your street or school/i,
+    });
+
+    expect(within(community).getByText('Delhi, Delhi, India')).toBeInTheDocument();
+    expect(within(community).getByText('Unhealthy')).toBeInTheDocument();
+  });
+
+  it('shows only the actions with a shared effect', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+
+    const community = await screen.findByRole('region', {
+      name: /share with your street or school/i,
+    });
+
+    // The fixture has one transport item with a real community effect; the
+    // rest are personal-only.
+    expect(
+      within(community).getByText(
+        'Replace one car trip with a lower-emission option',
+      ),
+    ).toBeInTheDocument();
+    expect(
+      within(community).queryByText('Wear a well-fitted respirator outdoors'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('omits personal exposure text, so it is safe to share', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+
+    const community = await screen.findByRole('region', {
+      name: /share with your street or school/i,
+    });
+
+    for (const item of PLAN.recommendations) {
+      expect(within(community).queryByText(item.personalImpact)).not.toBeInTheDocument();
+    }
+  });
+
+  it('states what it leaves out, so the user knows before sharing', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    renderDashboard();
+
+    await generatePlan(user);
+
+    const community = await screen.findByRole('region', {
+      name: /share with your street or school/i,
+    });
+    expect(within(community).getByText(/safe to share/i)).toBeInTheDocument();
+  });
+
+  it('copies the checklist as text', async () => {
+    stubApi();
+    // user-event installs its own clipboard stub during setup, so the
+    // override has to come afterwards.
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText },
+      configurable: true,
+    });
+
+    renderDashboard();
+
+    await generatePlan(user);
+    const community = await screen.findByRole('region', {
+      name: /share with your street or school/i,
+    });
+
+    await user.click(within(community).getByRole('button', { name: /copy as text/i }));
+
+    expect(writeText).toHaveBeenCalledOnce();
+    const copied = String(writeText.mock.calls[0]![0]);
+    expect(copied).toContain('Delhi');
+    expect(copied).toMatch(/not medical advice/i);
+    expect(await screen.findByText(/copied to your clipboard/i)).toBeInTheDocument();
+  });
+
+  it('explains when the browser blocks copying', async () => {
+    stubApi();
+    const user = userEvent.setup();
+    Object.defineProperty(navigator, 'clipboard', {
+      value: { writeText: vi.fn().mockRejectedValue(new Error('blocked')) },
+      configurable: true,
+    });
+
+    renderDashboard();
+
+    await generatePlan(user);
+    const community = await screen.findByRole('region', {
+      name: /share with your street or school/i,
+    });
+
+    await user.click(within(community).getByRole('button', { name: /copy as text/i }));
+
+    expect(await screen.findByText(/copying was blocked/i)).toBeInTheDocument();
   });
 });
 

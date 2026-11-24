@@ -106,22 +106,34 @@ SmogWise uses a hybrid approach so that safety does not depend only on a languag
 
 ## Current Status
 
-**Phases 1 and 2 are complete.** The application runs end to end locally with a landing page and dashboard, and the full AWS deployment exists as validated infrastructure-as-code. 195 tests pass. Phase 3 (polish and submission) is outstanding.
+**All three phases are code complete.** 265 tests pass, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the container image builds. What remains needs your AWS account and a camera: the live deployment, a manual screen-reader pass, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
 
 | Area | State |
 |---|---|
 | Landing page | Built, with a live example reading |
-| Dashboard | Built, with a three-step progress indicator |
-| React frontend | 82 tests passing |
-| Node.js API | 113 tests passing |
+| Dashboard | Built, three-step progress indicator |
+| Saved plans | Built, device-local with user-controlled deletion |
+| Community checklist | Built, household and health details stripped |
+| React frontend | 126 tests passing |
+| Node.js API | 139 tests passing |
 | Live air-quality data | Working against Open-Meteo, no API key required |
 | Risk and recommendation rules | Complete, verified over 1,000+ household and band combinations |
 | Amazon Bedrock | Integrated with schema validation and a safe fallback; disabled until a model id is configured |
-| Amazon DynamoDB | Table deployable, schema designed. The saved-plan feature that writes to it is Phase 3 |
+| Amazon DynamoDB | Backs the air-quality cache with TTL. Holds no personal data |
 | Container image | Dockerfile builds, multi-stage, non-root |
 | AWS infrastructure | 5 CloudFormation templates, all passing `cfn-lint` |
-| CI/CD | 3 GitHub Actions workflows, OIDC, no long-lived keys |
+| CI/CD | 3 workflows, 8 jobs, OIDC, dependency + container + secret scanning |
 | Deployed to AWS | **Not yet run.** Needs your AWS account. See [`infrastructure/README.md`](infrastructure/README.md) |
+
+### Documentation
+
+| Document | Covers |
+|---|---|
+| [`docs/architecture.md`](docs/architecture.md) | System shape, request flow, the rules-over-model decision, caching, where data lives |
+| [`docs/limitations.md`](docs/limitations.md) | What is unverified, deliberate constraints, accuracy caveats, testing boundaries |
+| [`infrastructure/README.md`](infrastructure/README.md) | Deployment runbook, security decisions, teardown |
+| [`backend/README.md`](backend/README.md) | API reference, risk model, environment variables |
+| [`frontend/README.md`](frontend/README.md) | Structure, accessibility, privacy |
 
 > **Before deploying:** AWS closed App Runner to new customers on 30 April 2026. If your account did not use App Runner before that date, `04-backend.yaml` will not deploy. The runbook includes a one-command eligibility check and the alternative AWS recommends. Details in [`infrastructure/README.md`](infrastructure/README.md).
 
@@ -148,8 +160,8 @@ To enable Bedrock personalisation, copy `backend/.env.example` to `backend/.env`
 ### Checks
 
 ```bash
-cd backend  && npm run typecheck && npm test && npm run build
-cd frontend && npm run lint && npm run typecheck && npm test && npm run build
+cd backend  && npm run typecheck && npm test && npm run build && npm audit
+cd frontend && npm run lint && npm run typecheck && npm test && npm run build && npm audit
 
 # Infrastructure templates
 pip install cfn-lint && cfn-lint
@@ -157,6 +169,14 @@ pip install cfn-lint && cfn-lint
 # Container image
 docker build -t smogwise-api:local ./backend
 ```
+
+On Windows, [`verify.ps1`](verify.ps1) runs all of the above except the container build and prints one summary:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\verify.ps1
+```
+
+The same checks run in CI on every push, across eight jobs that add Trivy image scanning and a Gitleaks scan of full history.
 
 ## Pages
 
@@ -427,43 +447,46 @@ Everything below is written and validated locally. Applying it to a live AWS acc
 
 One finding worth your attention: AWS moved **App Runner into maintenance mode on 31 March 2026** and closed it to new customers on 30 April 2026 ([AWS notice](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html)). You asked for App Runner and the template targets it, which works for accounts that already used the service. If yours did not, AWS directs new accounts to Amazon ECS Express Mode; only the compute service would change, and the container, registry, database, and frontend stacks stay exactly as they are.
 
-### Phase 3: Product Polish, Validation, and Submission
+### Phase 3: Product Polish, Validation, and Submission — code complete
 
 **Goal:** Improve practical usefulness, verify evaluation criteria, and prepare the final submission.
 
 #### Feature completion
 
-- [ ] Add saved plans and user-controlled deletion.
-- [ ] Add Amazon Cognito only if private accounts or cross-device profiles are required.
-- [ ] Add community checklists that contain no private household or health data.
-- [ ] Refine low-emission routines, indoor air-quality guidance, and sustainable alternatives.
-- [ ] Show the method, source, and uncertainty behind impact estimates.
-- [ ] Add general guidance for stale or unavailable live AQI data.
-- [ ] Add optional localization and plain-language content where time permits.
+- [x] Add saved plans and user-controlled deletion. Device-local, with single and bulk delete behind a confirmation
+- [x] ~~Add Amazon Cognito only if private accounts or cross-device profiles are required.~~ Not required: plans stay on the device, so accounts would add an attack surface and a store of health-adjacent data for no user benefit
+- [x] Add community checklists that contain no private household or health data. Subtractive by design, asserted by tests
+- [x] Refine low-emission routines, indoor air-quality guidance, and sustainable alternatives. 20 reviewed catalogue entries across four categories
+- [x] Show the method, source, and uncertainty behind impact estimates. Every card carries an evidence rating; no entry claims a percentage
+- [x] Add general guidance for stale or unavailable live AQI data. Readings over three hours old are flagged; a missing reading reports `Unknown` with precautionary advice
+- [ ] Add optional localization and plain-language content where time permits. **Not done.** English only, which is a real barrier in the worst-affected cities
 
 #### Quality and optimization
 
-- [ ] Complete end-to-end tests for location selection, plan generation, saving, and deletion.
-- [ ] Test with children, older adults, and respiratory-sensitive profile scenarios.
-- [ ] Run automated accessibility checks and manual keyboard and screen-reader testing.
-- [ ] Test mobile layouts, slow connections, empty states, upstream failures, and unsupported locations.
-- [ ] Run dependency, container, and secret scans.
-- [ ] Verify authorization, input limits, rate limits, CORS, and data-deletion behavior.
-- [ ] Improve CloudFront caching, DynamoDB TTL usage, AQI cache freshness, and Bedrock prompt size.
-- [ ] Review CloudWatch alarms, AWS costs, application latency, and failure rates.
+- [x] Complete end-to-end tests for location selection, plan generation, saving, and deletion. Full journey covered at component level with `fetch` stubbed
+- [x] Test with children, older adults, and respiratory-sensitive profile scenarios. Part of the 1,000+ case matrix, plus explicit escalation tests
+- [x] Run automated accessibility checks. axe on every route, plus labelling, grouping, heading order, and live-region assertions
+- [x] Test empty states, upstream failures, and unsupported locations. Covered for search, reading, and plan generation
+- [x] Run dependency, container, and secret scans. `npm audit` reports zero vulnerabilities in both projects; CI adds Trivy and Gitleaks
+- [x] Verify input limits, rate limits, CORS, and data-deletion behaviour. Asserted by route and storage tests
+- [x] Improve CloudFront caching, DynamoDB TTL usage, and AQI cache freshness. Immutable hashed assets, uncached entry point, 10-minute reading cache on a 1 km grid
+- [x] Limit Bedrock prompt size. Only the selected entries are sent, and the response schema is length-capped
+- [ ] Manual keyboard and screen-reader testing. **Needs a human.** Structure is asserted by tests; NVDA, JAWS, and VoiceOver passes are not automatable here
+- [ ] Test mobile layouts and slow connections on real devices. **Not done.** Responsive and tested at jsdom level only
+- [ ] Review CloudWatch alarms, AWS costs, latency, and failure rates. **Requires a live deployment**
 
 #### Documentation and submission
 
-- [ ] Add verified local setup, environment variable, test, build, and deployment instructions.
-- [ ] Document architecture, API endpoints, assumptions, data sources, safety limits, and known limitations.
-- [ ] Add screenshots and a concise application walkthrough.
-- [ ] Record the demonstration video and publish it as unlisted or grant public Drive access.
-- [ ] Confirm that the GitHub repository is public and contains only one branch.
-- [ ] Remove generated files and other unnecessary content so the repository remains below 10 MB.
-- [ ] Perform a final production smoke test using a new browser session.
-- [ ] Submit the public repository link only after every checklist item is verified.
+- [x] Add verified local setup, environment variable, test, build, and deployment instructions. Every command in this README was run
+- [x] Document architecture, API endpoints, assumptions, data sources, safety limits, and known limitations. See the documentation table above
+- [x] Confirm that the GitHub repository is public and contains only one branch. Verified by unauthenticated fetch and `git ls-remote`
+- [x] Remove generated files and other unnecessary content so the repository remains below 10 MB. Tracked content is well under a megabyte
+- [ ] Add screenshots and a concise application walkthrough. **Needs you.** Run the app and capture the landing page, a reading, and a plan
+- [ ] Record the demonstration video and publish it unlisted or via an accessible Drive link. **Needs you**
+- [ ] Perform a final production smoke test in a new browser session. **Requires a live deployment**
+- [ ] Submit the public repository link once the items above are done
 
-**Phase 3 deliverable:** An accessible, tested, documented, and submission-ready application that meets the challenge's code quality, security, efficiency, testing, accessibility, and problem-alignment criteria.
+**Phase 3 deliverable: code complete.** The application is accessible, tested, and documented. Four items remain and none are code: screenshots, the video, the live deployment, and a manual screen-reader pass. [`docs/limitations.md`](docs/limitations.md) records every one of them rather than leaving a reviewer to discover them.
 
 ## Repository Structure
 
@@ -478,18 +501,24 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 │   │   ├── utils/            # Errors and logging
 │   │   ├── app.ts            # Express app, exported for tests
 │   │   └── server.ts         # Listener and shutdown
-│   ├── tests/                # 113 Vitest tests
+│   ├── tests/                # 139 Vitest tests
 │   └── .env.example
 │   ├── Dockerfile            # Multi-stage, non-root runtime
 │   └── .env.example
 ├── frontend/                 # React application
 │   ├── src/
 │   │   ├── routes/           # Landing, dashboard, not-found
-│   │   ├── components/       # Header, footer, location, air quality, form, plan
+│   │   ├── components/       # Header, footer, location, air quality, form, plan,
+│   │   │                     # saved plans, community checklist
 │   │   ├── test/             # Fetch stub, fixtures, router helper
+│   │   ├── storage.ts        # Device-local saved plans
+│   │   ├── community.ts      # Shareable checklist, household data stripped
 │   │   ├── api.ts            # API client
 │   │   └── types.ts          # Contract types
-│   └── src/**/*.test.tsx     # 82 Vitest tests
+│   └── src/**/*.test.{ts,tsx}  # 126 Vitest tests
+├── docs/
+│   ├── architecture.md       # System shape, request flow, design decisions
+│   └── limitations.md        # What is unverified and why
 ├── infrastructure/           # CloudFormation, deployed in numeric order
 │   ├── 01-github-oidc.yaml   # CI deployment role
 │   ├── 02-ecr.yaml           # Container registry
@@ -508,12 +537,12 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 
 ## Submission Checklist
 
-- [ ] The GitHub repository is public.
-- [ ] The repository contains only one branch.
-- [ ] The complete repository is smaller than 10 MB.
-- [ ] The README explains the vertical, approach, logic, operation, and assumptions.
-- [ ] Setup, test, and deployment instructions are verified.
-- [ ] No credentials, tokens, personal information, or `.env` files are committed.
-- [ ] The application includes tests and accessibility checks.
+- [x] The GitHub repository is public. Verified by fetching raw files without credentials
+- [x] The repository contains only one branch. `git ls-remote --heads` returns `main` alone
+- [x] The complete repository is smaller than 10 MB. Tracked content is under 1 MB; `node_modules` and `dist` are ignored
+- [x] The README explains the vertical, approach, logic, operation, and assumptions.
+- [x] Setup, test, and deployment instructions are verified. Every local command was run; deployment commands are scripted but unapplied
+- [x] No credentials, tokens, personal information, or `.env` files are committed. Only `.env.example`; CI also runs Gitleaks over full history
+- [x] The application includes tests and accessibility checks. 265 tests, including axe on every route
 - [ ] The video is unlisted on YouTube or shared through a publicly accessible Drive link.
 - [ ] The public GitHub repository URL is submitted within the allowed three attempts.

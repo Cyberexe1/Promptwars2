@@ -41,6 +41,10 @@ const environmentSchema = z.object({
   AWS_REGION: z.string().min(1).default('us-east-1'),
   BEDROCK_MODEL_ID: z.string().default(''),
   BEDROCK_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60000).default(12000),
+  DYNAMODB_TABLE_NAME: z.string().default(''),
+  // Provider readings update hourly, so a few minutes costs no freshness
+  // while removing most repeat upstream calls for the same area.
+  AQI_CACHE_TTL_SECONDS: z.coerce.number().int().min(0).max(3600).default(600),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1000).default(60000),
   RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(60),
 });
@@ -56,6 +60,10 @@ export interface AppConfig {
   /** Empty string means Bedrock is disabled and the rules engine is used alone. */
   bedrockModelId: string;
   bedrockTimeoutMs: number;
+  /** Empty string means the air-quality cache stays in process memory. */
+  dynamoDbTableName: string;
+  /** Zero disables air-quality caching entirely. */
+  aqiCacheTtlSeconds: number;
   rateLimitWindowMs: number;
   rateLimitMax: number;
 }
@@ -89,6 +97,8 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env): AppConfig {
     awsRegion: env.AWS_REGION,
     bedrockModelId: env.BEDROCK_MODEL_ID.trim(),
     bedrockTimeoutMs: env.BEDROCK_TIMEOUT_MS,
+    dynamoDbTableName: env.DYNAMODB_TABLE_NAME.trim(),
+    aqiCacheTtlSeconds: env.AQI_CACHE_TTL_SECONDS,
     rateLimitWindowMs: env.RATE_LIMIT_WINDOW_MS,
     rateLimitMax: env.RATE_LIMIT_MAX,
   };

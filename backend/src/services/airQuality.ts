@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { config } from '../config.js';
 import { fetchJson } from './httpClient.js';
+import { cacheKeyFor, getAirQualityCache } from './cache.js';
 import { upstreamUnavailable } from '../utils/errors.js';
 import type { CurrentAirQuality, DataSource } from '../types.js';
 
@@ -60,10 +61,34 @@ export function isStale(observedAt: string, now: number = Date.now()): boolean {
   return now - observed > FRESHNESS_WINDOW_MS;
 }
 
+/**
+ * Current air quality for a coordinate.
+ *
+ * Served from the shared cache when a recent reading for the same grid cell
+ * exists. `source.retrievedAt` always reports when the data was actually
+ * fetched upstream, so a cached response states its own age honestly rather
+ * than presenting itself as fresh.
+ */
 export async function getCurrentAirQuality(
   latitude: number,
   longitude: number,
 ): Promise<AirQualityReading> {
+  const cache = getAirQualityCache();
+  const cacheKey = cacheKeyFor(latitude, longitude);
+
+  if (config.aqiCacheTtlSeconds > 0) {
+    const cached = await cache.get(cacheKey);
+    if (cached) {
+      return {
+        current: cached.current,
+        source: cached.source,
+        // Staleness depends on the current time, so it is recomputed on every
+        // read rather than stored.
+        stale: isStale(cached.current.observedAt),
+      };
+    }
+  }
+
   const url = new URL(config.airQualityApiUrl);
   url.searchParams.set('latitude', String(latitude));
   url.searchParams.set('longitude', String(longitude));
@@ -95,13 +120,21 @@ export async function getCurrentAirQuality(
     observedAt,
   };
 
+  const source: DataSource = {
+    name: AIR_QUALITY_SOURCE_NAME,
+    url: AIR_QUALITY_SOURCE_URL,
+    retrievedAt: new Date().toISOString(),
+  };
+
+  if (config.aqiCacheTtlSeconds > 0) {
+    // Not awaited for correctness: a cache write must never delay or fail the
+    // response the user is waiting for.
+    void cache.put(cacheKey, { current, source });
+  }
+
   return {
     current,
-    source: {
-      name: AIR_QUALITY_SOURCE_NAME,
-      url: AIR_QUALITY_SOURCE_URL,
-      retrievedAt: new Date().toISOString(),
-    },
+    source,
     stale: isStale(observedAt),
   };
 }

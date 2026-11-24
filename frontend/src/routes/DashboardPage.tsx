@@ -1,11 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError, fetchAirQuality, fetchRecommendations } from '../api';
 import { AirQualityPanel } from '../components/AirQualityPanel';
+import { CommunityChecklist } from '../components/CommunityChecklist';
 import { LocationPicker } from '../components/LocationPicker';
 import { ProfileForm } from '../components/ProfileForm';
 import { RecommendationList } from '../components/RecommendationList';
+import { SavedPlans } from '../components/SavedPlans';
 import { StepIndicator } from '../components/StepIndicator';
 import { DEFAULT_PROFILE } from '../defaults';
+import {
+  isStorageAvailable,
+  listSavedPlans,
+  savePlan,
+  type SavedPlan,
+} from '../storage';
 import type {
   AirQualityResponse,
   HouseholdProfile,
@@ -44,7 +52,16 @@ export function DashboardPage() {
     typeof navigator === 'undefined' ? true : navigator.onLine,
   );
 
+  // Read once on mount, then only after the user saves or deletes, so the
+  // list never disagrees with storage.
+  const [saved, setSaved] = useState<SavedPlan[]>(() => listSavedPlans());
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+
   const planRef = useRef<HTMLDivElement>(null);
+
+  const refreshSaved = useCallback(() => {
+    setSaved(listSavedPlans());
+  }, []);
 
   useEffect(() => {
     function update() {
@@ -127,6 +144,23 @@ export function DashboardPage() {
       })
       .finally(() => setLoadingPlan(false));
   }, [location, profile]);
+
+  const storageAvailable = isStorageAvailable();
+
+  const handleSave = useCallback(() => {
+    if (!currentPlan?.data || !location) {
+      return;
+    }
+    const entry = savePlan(location.name, currentPlan.data);
+    if (entry) {
+      refreshSaved();
+      setSaveNotice('Plan saved to this browser.');
+    } else {
+      setSaveNotice(
+        'This browser would not accept the save, most likely because storage is full.',
+      );
+    }
+  }, [currentPlan, location, refreshSaved]);
 
   // Step 1 is done once a reading loads; step 2 once a plan is generated.
   const completed: number[] = [];
@@ -211,9 +245,46 @@ export function DashboardPage() {
         )}
 
         {!loadingPlan && currentPlan?.data && (
-          <RecommendationList plan={currentPlan.data} />
+          <>
+            <RecommendationList plan={currentPlan.data} />
+
+            <section className="card" aria-labelledby="keep-heading">
+              <h2 id="keep-heading">Keep this plan</h2>
+              <p className="hint">
+                Saved plans stay in this browser and never reach a server, so
+                nothing about your household leaves this device.
+              </p>
+
+              {storageAvailable ? (
+                <button
+                  type="button"
+                  className="button button-primary"
+                  onClick={handleSave}
+                >
+                  Save this plan
+                </button>
+              ) : (
+                <p className="alert alert-warning" role="note">
+                  This browser is blocking local storage, most likely private
+                  browsing, so plans cannot be saved. You can still print the
+                  plan below.
+                </p>
+              )}
+
+              <p className="status" role="status" aria-live="polite">
+                {saveNotice}
+              </p>
+            </section>
+
+            <CommunityChecklist
+              locationName={currentPlan.location.name}
+              plan={currentPlan.data}
+            />
+          </>
         )}
       </div>
+
+      <SavedPlans plans={saved} onChange={refreshSaved} />
     </div>
   );
 }
