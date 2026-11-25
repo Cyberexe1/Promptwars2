@@ -24,6 +24,15 @@ Parameters:
     AllowedValues: [PriceClass_100, PriceClass_200, PriceClass_All]
     Default: PriceClass_100
 
+  ApiOrigin:
+    Type: String
+    Description: >
+      The backend origin the page is allowed to call, as
+      https://xxxx.awsapprunner.com. Added to the Content-Security-Policy
+      connect-src list. Leave empty on the first deployment, then redeploy
+      with the real value once App Runner exists.
+    Default: ''
+
 Conditions:
   HasCustomDomain: !And
     - !Not [!Equals [!Ref DomainName, '']]
@@ -94,19 +103,13 @@ Resources:
         Name: !Sub '${AWS::StackName}-security-headers'
         SecurityHeadersConfig:
           ContentSecurityPolicy:
-            # connect-src stays open because the API origin is an App Runner
-            # domain supplied at build time. Tighten this to the exact API
-            # origin once a stable domain is in place.
-            ContentSecurityPolicy: >
-              default-src 'self';
-              img-src 'self' data:;
-              style-src 'self' 'unsafe-inline';
-              script-src 'self';
-              connect-src *;
-              font-src 'self';
-              object-src 'none';
-              base-uri 'self';
-              frame-ancestors 'none'
+            # Must be a single-line string. A YAML folded block adds a
+            # trailing newline, which CloudFront rejects as an illegal
+            # character.
+            #
+            # connect-src is restricted to the API origin passed in at deploy
+            # time, so the page can only call its own backend.
+            ContentSecurityPolicy: !Sub "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ${ApiOrigin}; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
             Override: true
           ContentTypeOptions:
             Override: true

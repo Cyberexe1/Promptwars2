@@ -116,11 +116,14 @@ if (-not $DryRun) {
 # 1. Frontend infrastructure, first: the backend needs the CloudFront domain.
 # ---------------------------------------------------------------------------
 Step '1/6 Frontend infrastructure (S3 and CloudFront)'
+# ApiOrigin is empty on this pass: App Runner does not exist yet. Step 4
+# redeploys this stack with the real origin so the Content-Security-Policy
+# permits exactly one backend.
 Invoke-Checked 'deploy frontend stack' {
     aws cloudformation deploy `
         --template-file (Join-Path $infraDir '05-frontend.yaml') `
         --stack-name "$Prefix-frontend" `
-        --parameter-overrides "BucketName=$bucket" `
+        --parameter-overrides "BucketName=$bucket" 'ApiOrigin=' `
         --region $Region
 }
 
@@ -181,6 +184,16 @@ Invoke-Checked 'deploy backend stack' {
 
 $apiUrl = if ($DryRun) { 'https://dry-run.awsapprunner.com' } else { Get-StackOutput "$Prefix-backend" 'ServiceUrl' }
 Info 'api url' $apiUrl
+
+# Now that the API origin is known, tighten the frontend CSP to allow exactly
+# that backend instead of leaving connect-src open.
+Invoke-Checked 'point the CSP at the API origin' {
+    aws cloudformation deploy `
+        --template-file (Join-Path $infraDir '05-frontend.yaml') `
+        --stack-name "$Prefix-frontend" `
+        --parameter-overrides "BucketName=$bucket" "ApiOrigin=$apiUrl" `
+        --region $Region
+}
 
 if (-not $DryRun) {
     Invoke-Checked 'check API health' { curl.exe -fsS --retry 10 --retry-delay 6 "$apiUrl/health" }

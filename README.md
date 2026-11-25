@@ -104,6 +104,35 @@ SmogWise uses a hybrid approach so that safety does not depend only on a languag
 - Sensitive data is not written to application logs.
 - Stored profiles can be viewed and deleted by the user.
 
+## Live deployment
+
+| | URL |
+|---|---|
+| **Web app** | https://d1lae1x52oxefj.cloudfront.net |
+| **API** | https://yzjmcnk4t4.us-east-1.awsapprunner.com |
+| API health | https://yzjmcnk4t4.us-east-1.awsapprunner.com/health |
+
+Frontend on CloudFront over a private S3 bucket, backend on AWS App Runner,
+accounts and the reading cache in DynamoDB, in `us-east-1`.
+
+Verified against the running deployment:
+
+| Check | Result |
+|---|---|
+| API health | `{"status":"ok"}` |
+| Live reading | US AQI 181, banded "Unhealthy", 24-hour outlook returned |
+| Account creation | HTTP 201, session cookie set |
+| Authenticated plan | 6 recommendations, escalated unhealthy → very unhealthy for a sensitive household |
+| Anonymous plan request | 401, as intended |
+| CORS from CloudFront | Allowed, echoing that exact origin |
+| CORS from another origin | 403 |
+| Client-side route `/dashboard` | 200 via the single-page-app fallback |
+| Security headers | HSTS, CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` |
+
+> Running this costs money. App Runner bills continuously at `MinSize: 1`
+> whether or not anyone visits. Teardown commands are in
+> [`infrastructure/README.md`](infrastructure/README.md).
+
 ## Current Status
 
 **All three phases are code complete.** 389 tests pass, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the container image builds. What remains needs your AWS account and a camera: the live deployment, a manual screen-reader pass, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
