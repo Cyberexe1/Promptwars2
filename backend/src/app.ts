@@ -7,6 +7,7 @@ import { apiRouter } from './routes/index.js';
 import { createAuthRouter } from './routes/auth.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { attachUser } from './middleware/requireAuth.js';
+import { issueCsrfToken, requireCsrfToken } from './middleware/csrf.js';
 import { AppError } from './utils/errors.js';
 
 /**
@@ -33,6 +34,9 @@ export function createApp(config: AppConfig = defaultConfig): express.Express {
       // allowed, which in turn forbids a wildcard origin. The explicit
       // allowlist below is therefore a requirement, not just good practice.
       credentials: true,
+      // The CSRF token travels in a custom header, which must be allowed
+      // through the preflight or the browser will not send it.
+      allowedHeaders: ['content-type', 'accept', 'x-csrf-token'],
       origin(origin, callback) {
         // Same-origin and server-to-server calls arrive without an Origin.
         if (!origin || config.corsAllowedOrigins.includes(origin)) {
@@ -61,6 +65,12 @@ export function createApp(config: AppConfig = defaultConfig): express.Express {
   // Reads the session cookie when one is present. Non-blocking: public
   // endpoints keep working for signed-out visitors.
   app.use(attachUser);
+
+  // Hands API callers a CSRF token, then requires it on state-changing
+  // requests. Scoped to /api so the health probe, which App Runner polls
+  // every ten seconds, does not collect a cookie it will never use.
+  app.use('/api', issueCsrfToken);
+  app.use('/api', requireCsrfToken);
 
   app.use(
     '/api',

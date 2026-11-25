@@ -135,7 +135,7 @@ Verified against the running deployment:
 
 ## Current Status
 
-**All three phases are code complete.** 389 tests pass, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the container image builds. What remains needs your AWS account and a camera: the live deployment, a manual screen-reader pass, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
+**All three phases are complete and deployed.** 454 tests pass with enforced coverage floors, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the stack is live on AWS. What remains needs a human: a manual screen-reader pass, real-device testing, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
 
 | Area | State |
 |---|---|
@@ -144,12 +144,12 @@ Verified against the running deployment:
 | Privacy page | Built, every claim linked to the code behind it |
 | Saved plans | Built, device-local with user-controlled deletion |
 | Community checklist | Built, household and health details stripped |
-| React frontend | 196 tests passing |
-| Node.js API | 193 tests passing |
+| React frontend | 246 tests passing, 94% statement coverage |
+| Node.js API | 208 tests passing, 84% statement coverage |
 | 24-hour outlook | Names the cleanest and worst hours ahead, so "shift your outdoor time" is actionable |
 | Live air-quality data | Working against Open-Meteo, no API key required |
 | Risk and recommendation rules | Complete, verified over 1,000+ household and band combinations |
-| Amazon Bedrock | Integrated with schema validation and a safe fallback; disabled until a model id is configured |
+| Amazon Bedrock | **Live**, using `amazon.nova-pro-v1:0`. Rewords reviewed advice; validated and bounded |
 | Accounts | Email and scrypt-hashed password, signed httpOnly session cookie |
 | Amazon DynamoDB | User accounts plus the air-quality cache with TTL |
 | Container image | Dockerfile builds, multi-stage, non-root |

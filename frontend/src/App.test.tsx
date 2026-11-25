@@ -28,12 +28,14 @@ describe('routing', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows the privacy page at /privacy', () => {
+  it('shows the privacy page at /privacy', async () => {
     stubApi();
     renderWithRouter(<App />, '/privacy');
 
+    // Code-split route, so this waits for the chunk rather than querying the
+    // Suspense fallback.
     expect(
-      screen.getByRole('heading', { level: 1, name: /what smogwise does/i }),
+      await screen.findByRole('heading', { level: 1, name: /what smogwise does/i }),
     ).toBeInTheDocument();
   });
 
@@ -78,12 +80,12 @@ describe('routing', () => {
     ).toBeInTheDocument();
   });
 
-  it('shows a helpful page for an unknown route', () => {
+  it('shows a helpful page for an unknown route', async () => {
     stubApi();
     renderWithRouter(<App />, '/no-such-page');
 
     expect(
-      screen.getByRole('heading', { level: 1, name: /does not exist/i }),
+      await screen.findByRole('heading', { level: 1, name: /does not exist/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole('link', { name: /go to the dashboard/i }),

@@ -10,11 +10,15 @@ import {
   readSessionToken,
   SESSION_COOKIE,
 } from '../src/services/sessions.js';
+import { csrfAgent, postEmpty, postJson } from './helpers.js';
 
 /**
- * The rate limit is raised well above the number of cases in this file, so the
- * limiter does not starve the behavioural tests. A dedicated suite at the
- * bottom builds its own app with a limit of 2 to exercise the limit itself.
+ * The rate limit is raised well above the number of cases here, so the limiter
+ * does not starve the behavioural tests. A suite at the bottom builds its own
+ * app with a limit of 2 to exercise the limit itself.
+ *
+ * Every POST goes through the helpers in ./helpers.ts, which supply a matching
+ * CSRF pair. CSRF itself is covered in csrf.test.ts.
  */
 const app = createApp(
   loadConfig({
@@ -32,11 +36,16 @@ beforeEach(() => {
   setUserStoreForTesting(new MemoryUserStore());
 });
 
-/** Pulls the session cookie out of a Set-Cookie header. */
-function sessionFrom(response: { headers: Record<string, unknown> }): string[] {
+function cookiesOf(response: { headers: Record<string, unknown> }): string[] {
   const raw = response.headers['set-cookie'];
   return Array.isArray(raw) ? (raw as string[]) : [];
 }
+
+const signup = (email = EMAIL, password = PASSWORD) =>
+  postJson(app, '/api/auth/signup', { email, password });
+
+const login = (email = EMAIL, password = PASSWORD) =>
+  postJson(app, '/api/auth/login', { email, password });
 
 describe('password hashing', () => {
   it('does not store the password itself', async () => {
@@ -72,19 +81,17 @@ describe('password hashing', () => {
 
 describe('session tokens', () => {
   it('round-trips a user id', () => {
-    const token = createSessionToken('user-1');
-    expect(readSessionToken(token)?.sub).toBe('user-1');
+    expect(readSessionToken(createSessionToken('user-1'))?.sub).toBe('user-1');
   });
 
   it('rejects a token whose payload was edited', () => {
     const token = createSessionToken('user-1');
-    const [body, signature] = token.split('.');
+    const signature = token.split('.')[1];
     const forged = Buffer.from(
       JSON.stringify({ sub: 'admin', exp: 9e9, jti: 'x' }),
       'utf8',
     ).toString('base64url');
 
-    expect(body).toBeTruthy();
     expect(readSessionToken(`${forged}.${signature}`)).toBeNull();
   });
 
@@ -117,37 +124,28 @@ describe('readCookie', () => {
 
 describe('POST /api/auth/signup', () => {
   it('creates an account and sets a session cookie', async () => {
-    const response = await request(app)
-      .post('/api/auth/signup')
-      .send({ email: EMAIL, password: PASSWORD });
+    const response = await signup();
 
     expect(response.status).toBe(201);
     expect(response.body.user.email).toBe(EMAIL);
-
-    const cookies = sessionFrom(response);
-    expect(cookies.join(';')).toContain(SESSION_COOKIE);
+    expect(cookiesOf(response).join(';')).toContain(SESSION_COOKIE);
   });
 
   it('marks the session cookie HttpOnly and SameSite', async () => {
-    const response = await request(app)
-      .post('/api/auth/signup')
-      .send({ email: EMAIL, password: PASSWORD });
-
-    const cookie = sessionFrom(response).find((value) =>
+    const response = await signup();
+    const cookie = cookiesOf(response).find((value) =>
       value.startsWith(SESSION_COOKIE),
     )!;
 
-    // HttpOnly keeps the token away from scripts; SameSite limits cross-site use.
+    // HttpOnly keeps the token from script; SameSite limits cross-site use.
     expect(cookie).toContain('HttpOnly');
     expect(cookie).toContain('SameSite=Lax');
   });
 
   it('never returns the password or its hash', async () => {
-    const response = await request(app)
-      .post('/api/auth/signup')
-      .send({ email: EMAIL, password: PASSWORD });
-
+    const response = await signup();
     const body = JSON.stringify(response.body);
+
     expect(body).not.toContain(PASSWORD);
     expect(body).not.toContain('scrypt');
     expect(body).not.toContain('passwordHash');
@@ -160,30 +158,20 @@ describe('POST /api/auth/signup', () => {
     ['a missing password', { email: EMAIL }],
     ['an over-long password', { email: EMAIL, password: 'x'.repeat(500) }],
   ])('rejects %s', async (_label, body) => {
-    const response = await request(app).post('/api/auth/signup').send(body);
+    const response = await postJson(app, '/api/auth/signup', body);
     expect(response.status).toBe(400);
   });
 
   it('treats the email as case-insensitive', async () => {
-    await request(app)
-      .post('/api/auth/signup')
-      .send({ email: EMAIL, password: PASSWORD });
-
-    const duplicate = await request(app)
-      .post('/api/auth/signup')
-      .send({ email: 'Resident@Example.COM', password: PASSWORD });
+    await signup();
+    const duplicate = await signup('Resident@Example.COM');
 
     expect(duplicate.status).toBe(409);
   });
 
   it('does not confirm that an address is registered', async () => {
-    await request(app)
-      .post('/api/auth/signup')
-      .send({ email: EMAIL, password: PASSWORD });
-
-    const duplicate = await request(app)
-      .post('/api/auth/signup')
-      .send({ email: EMAIL, password: PASSWORD });
+    await signup();
+    const duplicate = await signup();
 
     // Wording must not single out "this email exists".
     expect(duplicate.body.error.message).toMatch(/cannot be used to register/i);
@@ -193,44 +181,29 @@ describe('POST /api/auth/signup', () => {
 
 describe('POST /api/auth/login', () => {
   beforeEach(async () => {
-    await request(app)
-      .post('/api/auth/signup')
-      .send({ email: EMAIL, password: PASSWORD });
+    await signup();
   });
 
   it('signs in with the right credentials', async () => {
-    const response = await request(app)
-      .post('/api/auth/login')
-      .send({ email: EMAIL, password: PASSWORD });
+    const response = await login();
 
     expect(response.status).toBe(200);
     expect(response.body.user.email).toBe(EMAIL);
   });
 
   it('accepts a differently cased email', async () => {
-    const response = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'RESIDENT@EXAMPLE.COM', password: PASSWORD });
-
+    const response = await login('RESIDENT@EXAMPLE.COM');
     expect(response.status).toBe(200);
   });
 
   it('rejects a wrong password', async () => {
-    const response = await request(app)
-      .post('/api/auth/login')
-      .send({ email: EMAIL, password: 'wrong password here' });
-
+    const response = await login(EMAIL, 'wrong password here');
     expect(response.status).toBe(401);
   });
 
   it('gives identical wording for an unknown account and a wrong password', async () => {
-    const wrongPassword = await request(app)
-      .post('/api/auth/login')
-      .send({ email: EMAIL, password: 'wrong password here' });
-
-    const unknownUser = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'nobody@example.com', password: PASSWORD });
+    const wrongPassword = await login(EMAIL, 'wrong password here');
+    const unknownUser = await login('nobody@example.com', PASSWORD);
 
     // Any difference here would let an attacker enumerate accounts.
     expect(unknownUser.status).toBe(wrongPassword.status);
@@ -238,9 +211,10 @@ describe('POST /api/auth/login', () => {
   });
 
   it('answers a malformed login the same way as a failed one', async () => {
-    const response = await request(app)
-      .post('/api/auth/login')
-      .send({ email: 'nonsense', password: 'x' });
+    const response = await postJson(app, '/api/auth/login', {
+      email: 'nonsense',
+      password: 'x',
+    });
 
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('INVALID_CREDENTIALS');
@@ -256,7 +230,7 @@ describe('GET /api/auth/me', () => {
   });
 
   it('identifies the signed-in user', async () => {
-    const agent = request.agent(app);
+    const agent = csrfAgent(app);
     await agent.post('/api/auth/signup').send({ email: EMAIL, password: PASSWORD });
 
     const response = await agent.get('/api/auth/me');
@@ -275,7 +249,7 @@ describe('GET /api/auth/me', () => {
 
 describe('POST /api/auth/logout', () => {
   it('clears the session cookie', async () => {
-    const agent = request.agent(app);
+    const agent = csrfAgent(app);
     await agent.post('/api/auth/signup').send({ email: EMAIL, password: PASSWORD });
     await expect(agent.get('/api/auth/me')).resolves.toMatchObject({ status: 200 });
 
@@ -287,7 +261,7 @@ describe('POST /api/auth/logout', () => {
   });
 
   it('succeeds even when no session exists', async () => {
-    await expect(request(app).post('/api/auth/logout')).resolves.toMatchObject({
+    await expect(postEmpty(app, '/api/auth/logout')).resolves.toMatchObject({
       status: 200,
     });
   });
@@ -308,7 +282,7 @@ describe('protected endpoints', () => {
   };
 
   it('refuses a plan request with no session', async () => {
-    const response = await request(app).post('/api/recommendations').send(body);
+    const response = await postJson(app, '/api/recommendations', body);
 
     expect(response.status).toBe(401);
     expect(response.body.error.code).toBe('UNAUTHENTICATED');
@@ -324,10 +298,8 @@ describe('protected endpoints', () => {
     expect(response.status).not.toBe(401);
   });
 
-  it('rejects an unauthenticated request before doing any work', async () => {
-    const response = await request(app)
-      .post('/api/recommendations')
-      .send({ nonsense: true });
+  it('rejects an unauthenticated request before validating it', async () => {
+    const response = await postJson(app, '/api/recommendations', { nonsense: true });
 
     // Authentication is checked ahead of validation, so an anonymous caller
     // learns nothing about the request shape.
@@ -346,9 +318,10 @@ describe('credential rate limiting', () => {
     );
 
     const attempt = () =>
-      request(limited)
-        .post('/api/auth/login')
-        .send({ email: EMAIL, password: 'guessing a password' });
+      postJson(limited, '/api/auth/login', {
+        email: EMAIL,
+        password: 'guessing a password',
+      });
 
     await attempt();
     await attempt();

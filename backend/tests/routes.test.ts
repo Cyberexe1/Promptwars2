@@ -17,6 +17,8 @@ const { loadConfig } = await import('../src/config.js');
 const { getCurrentAirQuality } = await import('../src/services/airQuality.js');
 const { searchLocations } = await import('../src/services/geocoding.js');
 const { upstreamUnavailable } = await import('../src/utils/errors.js');
+const { postJson, TEST_CSRF } = await import('./helpers.js');
+const { CSRF_COOKIE, CSRF_HEADER } = await import('../src/middleware/csrf.js');
 const { createSessionToken, SESSION_COOKIE } = await import(
   '../src/services/sessions.js'
 );
@@ -72,12 +74,9 @@ const VALID_BODY = {
  */
 const SESSION = `${SESSION_COOKIE}=${createSessionToken('test-user')}`;
 
-/** POSTs a plan request as a signed-in user. */
+/** POSTs a plan request as a signed-in user, with a valid CSRF pair. */
 function postPlan(body: unknown) {
-  return request(app)
-    .post('/api/recommendations')
-    .set('Cookie', SESSION)
-    .send(body as object);
+  return postJson(app, '/api/recommendations', body, [SESSION]);
 }
 
 beforeEach(() => {
@@ -326,7 +325,8 @@ describe('POST /api/recommendations', () => {
   it('rejects a malformed JSON body', async () => {
     const response = await request(app)
       .post('/api/recommendations')
-      .set('Cookie', SESSION)
+      .set('Cookie', [`${CSRF_COOKIE}=${TEST_CSRF}`, SESSION])
+      .set(CSRF_HEADER, TEST_CSRF)
       .set('content-type', 'application/json')
       .send('{"location":');
 

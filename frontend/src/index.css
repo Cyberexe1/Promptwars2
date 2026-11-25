@@ -19,7 +19,12 @@
   --surface-raised: #ffffff;
   --page: #f6f8f9;
   --line: #dde5e9;
-  --line-strong: #9aacb6;
+  /**
+   * Used for input borders, which are UI component boundaries and must clear
+   * 3:1 under WCAG 2.2 SC 1.4.11. The previous value was 2.35:1 on white.
+   * This is 3.86:1 on white and 3.62:1 on the page background.
+   */
+  --line-strong: #6f8591;
 
   /* ----- Colour: brand ----- */
   --brand: #0e5d74;

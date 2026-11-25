@@ -140,6 +140,7 @@ export async function createPlan(
       profile,
       current: reading.current,
       riskLabel: rules.risk.label,
+      escalatedForSensitivity: rules.risk.escalatedForSensitivity,
       guardrails,
       selected: rules.selected,
     });

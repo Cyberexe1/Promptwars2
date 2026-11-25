@@ -47,11 +47,39 @@ async function toApiError(response: Response): Promise<ApiError> {
   return new ApiError(response.status, message);
 }
 
+const CSRF_COOKIE = 'smogwise_csrf';
+const CSRF_HEADER = 'x-csrf-token';
+
+/** Safe methods are exempt from the CSRF check, so they need no token. */
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', undefined]);
+
+/**
+ * Reads the CSRF token the server set.
+ *
+ * This cookie is deliberately readable: the token is not a credential, it only
+ * proves the request came from a page that can read our own cookies. The
+ * session cookie remains httpOnly and is never touched here.
+ */
+function readCsrfToken(): string | null {
+  if (typeof document === 'undefined') {
+    return null;
+  }
+  for (const part of document.cookie.split(';')) {
+    const [name, ...rest] = part.trim().split('=');
+    if (name === CSRF_COOKIE) {
+      return decodeURIComponent(rest.join('='));
+    }
+  }
+  return null;
+}
+
 export async function requestJson<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
   let response: Response;
+
+  const csrfToken = SAFE_METHODS.has(init?.method) ? null : readCsrfToken();
 
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
@@ -62,6 +90,7 @@ export async function requestJson<T>(
       headers: {
         accept: 'application/json',
         ...(init?.body ? { 'content-type': 'application/json' } : {}),
+        ...(csrfToken ? { [CSRF_HEADER]: csrfToken } : {}),
         ...init?.headers,
       },
     });
