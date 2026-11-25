@@ -6,8 +6,12 @@ import type { RecommendationsResponse } from './types';
  * Deliberate choice: plans are never sent to a server. A plan's summary can
  * reveal that someone in the household is medically sensitive, so keeping it
  * on the device means that detail never reaches a database, a log, or a
- * backup. It also removes the need for accounts, which is why this project
- * has no authentication.
+ * backup.
+ *
+ * This is not because the project lacks accounts. It has them, and a signed-in
+ * user could perfectly well have their plans stored server-side. The point is
+ * that storing them would create a record of a household's health situation,
+ * so the account deliberately does not carry them.
  *
  * The trade-off is honest and stated in the interface: plans do not follow the
  * user to another device or browser, and clearing site data removes them.

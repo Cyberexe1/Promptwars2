@@ -449,10 +449,6 @@ export const CATALOGUE: readonly CatalogueItem[] = [
   },
 ] as const;
 
-export const CATALOGUE_IDS: ReadonlySet<string> = new Set(
-  CATALOGUE.map((item) => item.id),
-);
-
 export function findCatalogueItem(id: string): CatalogueItem | undefined {
   return CATALOGUE.find((item) => item.id === id);
 }

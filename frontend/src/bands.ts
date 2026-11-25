@@ -7,7 +7,11 @@ import type { RiskLevel } from './types';
  * with it. This exists for the hourly forecast series, where sending a band
  * per hour would triple the payload for information the client can derive.
  *
- * Boundaries mirror `backend/src/domain/aqi.ts`; a test asserts they agree.
+ * Boundaries mirror `backend/src/domain/aqi.ts`. Nothing enforces that they
+ * agree: `bands.test.ts` checks this function against its own hardcoded
+ * numbers, so a revised breakpoint on the backend would leave the forecast
+ * colours disagreeing with the headline reading and the test would still
+ * pass. Single-sourcing the band table across both projects is the real fix.
  */
 const UPPER_BOUNDS: readonly { readonly limit: number; readonly level: RiskLevel }[] = [
   { limit: 50, level: 'good' },

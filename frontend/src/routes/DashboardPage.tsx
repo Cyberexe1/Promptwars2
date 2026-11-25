@@ -145,7 +145,11 @@ export function DashboardPage() {
       .finally(() => setLoadingPlan(false));
   }, [location, profile]);
 
-  const storageAvailable = isStorageAvailable();
+  // Probed once. `isStorageAvailable` writes and deletes a key to find out,
+  // and whether local storage works does not change while the page is open,
+  // so calling it in the render body meant a storage round trip on every
+  // keystroke in the profile form.
+  const [storageAvailable] = useState(isStorageAvailable);
 
   const handleSave = useCallback(() => {
     if (!currentPlan?.data || !location) {

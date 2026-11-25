@@ -30,10 +30,6 @@ export interface PersonaliseInput {
   selected: CatalogueItem[];
 }
 
-export interface PersonaliseResult {
-  plan: ModelPlan;
-}
-
 const SYSTEM_PROMPT = [
   'You are SmogWise, an assistant that helps households act on winter smog and urban air pollution.',
   '',
@@ -62,6 +58,17 @@ function describeProfile(profile: HouseholdProfile): string {
     `owns an air purifier: ${profile.purifier ? 'yes' : 'no'}`,
     `budget for changes: ${profile.budget}`,
   ].join('\n');
+}
+
+/**
+ * Makes a caller-supplied string safe to place inside a delimited block.
+ *
+ * Angle brackets are removed rather than escaped. HTML entities would survive
+ * into the prompt as visible noise, and a model is perfectly capable of
+ * reading `&lt;` as a tag. A city name has no legitimate use for `<` or `>`.
+ */
+export function fenceSafe(value: string): string {
+  return value.replace(/[<>]/g, '').trim();
 }
 
 function describeReadings(
@@ -111,7 +118,13 @@ function buildUserPrompt(input: PersonaliseInput): string {
 
   return [
     '<location_name_untrusted_data>',
-    input.location.name,
+    // The delimiter is only a delimiter if the caller cannot write one. The
+    // name is validated for length and control characters but may still
+    // contain angle brackets, which is enough to close this tag and open a
+    // forged <safety_constraints> block in 105 characters. Telling the model
+    // to treat the value as data is a request; removing the characters is a
+    // control.
+    fenceSafe(input.location.name),
     '</location_name_untrusted_data>',
     '',
     '<readings>',

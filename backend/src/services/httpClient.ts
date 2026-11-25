@@ -5,6 +5,12 @@ import { upstreamUnavailable } from '../utils/errors.js';
  *
  * External responses are treated purely as data: callers parse them through a
  * schema and never act on instructions contained in them.
+ *
+ * Known limit on the size ceiling: a declared `content-length` is rejected
+ * before the body is read, but a provider that omits the header gets its whole
+ * body buffered by `response.text()` before the check below can run. Enforcing
+ * it properly needs an incremental read of the response stream. The timeout is
+ * the real backstop against an endless body.
  */
 const MAX_RESPONSE_BYTES = 512 * 1024;
 
@@ -42,7 +48,10 @@ export async function fetchJson<T = unknown>(
     }
 
     const text = await response.text();
-    if (text.length > MAX_RESPONSE_BYTES) {
+    // Bytes, not characters. `text.length` counts UTF-16 code units, so a
+    // response of multi-byte characters could be up to three times the stated
+    // ceiling and still pass.
+    if (Buffer.byteLength(text, 'utf8') > MAX_RESPONSE_BYTES) {
       throw upstreamUnavailable(
         `${options.label} returned an unexpectedly large response.`,
       );

@@ -79,17 +79,31 @@
       "Resource": "*"
     },
     {
-      "Sid": "RolesForTheServiceOnly",
+      "Sid": "CreateServiceRolesOnlyUnderTheBoundary",
       "Effect": "Allow",
       "Action": [
         "iam:CreateRole",
+        "iam:PutRolePolicy",
+        "iam:AttachRolePolicy"
+      ],
+      "Resource": [
+        "arn:aws:iam::*:role/smogwise-*",
+        "arn:aws:iam::*:role/SmogWise*"
+      ],
+      "Condition": {
+        "StringLike": {
+          "iam:PermissionsBoundary": "arn:aws:iam::*:policy/smogwise-role-boundary"
+        }
+      }
+    },
+    {
+      "Sid": "ManageThoseRolesWithoutWideningThem",
+      "Effect": "Allow",
+      "Action": [
         "iam:DeleteRole",
         "iam:GetRole",
-        "iam:PassRole",
-        "iam:PutRolePolicy",
         "iam:DeleteRolePolicy",
         "iam:GetRolePolicy",
-        "iam:AttachRolePolicy",
         "iam:DetachRolePolicy",
         "iam:ListRolePolicies",
         "iam:ListAttachedRolePolicies",
@@ -99,6 +113,36 @@
         "arn:aws:iam::*:role/smogwise-*",
         "arn:aws:iam::*:role/SmogWise*"
       ]
+    },
+    {
+      "Sid": "PassRolesOnlyToAppRunner",
+      "Effect": "Allow",
+      "Action": "iam:PassRole",
+      "Resource": [
+        "arn:aws:iam::*:role/smogwise-*",
+        "arn:aws:iam::*:role/SmogWise*"
+      ],
+      "Condition": {
+        "StringEquals": {
+          "iam:PassedToService": [
+            "tasks.apprunner.amazonaws.com",
+            "build.apprunner.amazonaws.com"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "NeverTouchTheBoundaryItself",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion",
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:PutRolePermissionsBoundary"
+      ],
+      "Resource": "arn:aws:iam::*:policy/smogwise-role-boundary"
     },
     {
       "Sid": "AppRunnerServiceLinkedRole",
@@ -200,9 +244,7 @@
         "secretsmanager:CreateSecret",
         "secretsmanager:DeleteSecret",
         "secretsmanager:DescribeSecret",
-        "secretsmanager:TagResource",
-        "secretsmanager:PutSecretValue",
-        "secretsmanager:UpdateSecret"
+        "secretsmanager:TagResource"
       ],
       "Resource": "arn:aws:secretsmanager:*:*:secret:smogwise-*"
     },

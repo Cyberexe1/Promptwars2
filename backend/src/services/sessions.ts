@@ -125,11 +125,20 @@ export function readCookie(header: string | undefined, name: string): string | n
 /** Cookie attributes. Shared by login and logout so they cannot drift apart. */
 export function sessionCookieOptions(maxAgeMs: number) {
   return {
+    // Blocks script access, so a cross-site scripting bug cannot read the
+    // token. It does not stop such a bug from making requests with it.
     httpOnly: true,
-    // Blocks script access, so a cross-site scripting bug cannot read the token.
+    // Limits the cookie to same-site requests, which blunts cross-site request
+    // forgery.
+    //
+    // KNOWN ISSUE: in the current deployment the frontend is on CloudFront and
+    // the API on App Runner, which are different sites, so a browser will not
+    // attach this cookie to the frontend's cross-site fetch at all. The fix is
+    // to serve the API through a CloudFront /api behaviour so the two share an
+    // origin, not to weaken this to 'none'. Note that the curl-based live
+    // smoke tests cannot catch this, because curl ignores SameSite.
     sameSite: 'lax' as const,
-    // The frontend is served from a different origin in production, which
-    // requires HTTPS for the cookie to be sent at all.
+    // Requires HTTPS. Off in development so local http works.
     secure: config.nodeEnv === 'production',
     path: '/',
     maxAge: maxAgeMs,

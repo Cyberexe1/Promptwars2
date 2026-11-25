@@ -1,6 +1,6 @@
 import { getCurrentAirQuality } from './airQuality.js';
 import { isBedrockEnabled, personalisePlan } from './bedrock.js';
-import { buildRulesPlan, DISCLAIMER } from '../domain/recommend.js';
+import { buildRulesPlan, DISCLAIMER, toRecommendation } from '../domain/recommend.js';
 import { deriveGuardrails, type SafetyGuardrails } from '../domain/risk.js';
 import type { ModelPlan } from '../schemas.js';
 import type { CatalogueItem } from '../domain/catalogue.js';
@@ -61,7 +61,7 @@ export function mergePlan(
 ): { recommendations: Recommendation[]; usedModel: boolean } {
   if (!plan) {
     return {
-      recommendations: selected.map((item) => ({ ...toRecommendation(item) })),
+      recommendations: selected.map(toRecommendation),
       usedModel: false,
     };
   }
@@ -73,6 +73,22 @@ export function mergePlan(
       .map((entry) => [entry.id, entry] as const),
   );
 
+  // Counts fields the model actually contributed, not entries it echoed back.
+  // A response can name every id correctly and still have every field rejected
+  // by chooseText, in which case the user reads catalogue prose and the
+  // provenance must say so.
+  let acceptedFields = 0;
+  const take = (
+    candidate: string | undefined,
+    fallback: string,
+  ): string => {
+    const chosen = chooseText(candidate, fallback, guardrails);
+    if (chosen !== fallback) {
+      acceptedFields += 1;
+    }
+    return chosen;
+  };
+
   const recommendations = selected.map((item) => {
     const override = byId.get(item.id);
     const base = toRecommendation(item);
@@ -83,37 +99,14 @@ export function mergePlan(
 
     return {
       ...base,
-      action: chooseText(override.action, base.action, guardrails),
-      why: chooseText(override.why, base.why, guardrails),
-      personalImpact: chooseText(
-        override.personalImpact,
-        base.personalImpact,
-        guardrails,
-      ),
-      communityImpact: chooseText(
-        override.communityImpact,
-        base.communityImpact,
-        guardrails,
-      ),
+      action: take(override.action, base.action),
+      why: take(override.why, base.why),
+      personalImpact: take(override.personalImpact, base.personalImpact),
+      communityImpact: take(override.communityImpact, base.communityImpact),
     };
   });
 
-  return { recommendations, usedModel: byId.size > 0 };
-}
-
-function toRecommendation(item: CatalogueItem): Recommendation {
-  return {
-    id: item.id,
-    category: item.category,
-    title: item.title,
-    action: item.action,
-    why: item.why,
-    personalImpact: item.personalImpact,
-    communityImpact: item.communityImpact,
-    cost: item.cost,
-    effort: item.effort,
-    confidence: item.confidence,
-  };
+  return { recommendations, usedModel: acceptedFields > 0 };
 }
 
 /**

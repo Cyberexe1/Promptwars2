@@ -8,8 +8,11 @@ $ErrorActionPreference = 'Continue'
 $env:AWS_PAGER = ''
 
 # ----- Load credentials -----------------------------------------------------
-$envFile = Join-Path $PSScriptRoot 'backend\.env'
-if (-not (Test-Path $envFile)) { Write-Output 'backend/.env not found'; exit 1 }
+# The .env lives in backend/ at the repo root, which is this script's parent.
+# Resolving against $PSScriptRoot alone pointed at infrastructure/backend/.env,
+# which does not exist, so every run exited here before probing anything.
+$envFile = Join-Path (Split-Path $PSScriptRoot -Parent) 'backend\.env'
+if (-not (Test-Path $envFile)) { Write-Output "not found: $envFile"; exit 1 }
 
 $values = @{}
 foreach ($line in Get-Content $envFile) {

@@ -56,11 +56,17 @@ CloudFront        ACCESS DENIED  frontend delivery
 Secrets Manager   ACCESS DENIED  session secret
 ```
 
-[`deploy-policy.json`](deploy-policy.json) grants exactly what the deployment
-needs. Attach it with an account administrator, not with the deploying
-identity itself:
+Two policies are needed, and **the boundary must exist first**, because the
+deployment policy refuses to create a role without it.
 
 ```bash
+# 1. The boundary. Caps what the roles the stack creates can ever do.
+aws iam create-policy \
+  --policy-name smogwise-role-boundary \
+  --policy-document file://infrastructure/role-boundary-policy.json
+
+# 2. The deployment policy itself. Attach with an account administrator,
+#    not with the deploying identity.
 aws iam create-policy \
   --policy-name SmogWiseDeploy \
   --policy-document file://infrastructure/deploy-policy.json
@@ -70,15 +76,40 @@ aws iam attach-user-policy \
   --policy-arn arn:aws:iam::<account-id>:policy/SmogWiseDeploy
 ```
 
-It is scoped to `smogwise-*` resources wherever AWS supports resource-level
+### Why there is a boundary
+
+The deployment needs `iam:CreateRole` and `iam:PutRolePolicy` so CloudFormation
+can build the App Runner instance and ECR access roles. Scoped only by role
+*name*, those two permissions are an escalation path: create `smogwise-anything`,
+put an `Action: "*", Resource: "*"` policy on it, pass it to a new App Runner
+service, read the credentials from inside the container. Two API calls from
+deploy key to account administrator.
+
+[`role-boundary-policy.json`](role-boundary-policy.json) caps the effective
+permissions of any role created under it, so a wide inline policy grants
+nothing beyond the boundary. `deploy-policy.json` requires it through an
+`iam:PermissionsBoundary` condition, `iam:PassRole` is conditioned on
+`iam:PassedToService` being App Runner, and a `Deny` statement stops the
+deploying identity editing or detaching the boundary. `04-backend.yaml` sets
+`PermissionsBoundary` on both roles it creates, controlled by the
+`RoleBoundaryPolicyName` parameter.
+
+Keep the boundary in step with the instance-role grants in `04-backend.yaml`.
+A permission the app needs but the boundary omits fails at runtime, not at
+deploy time.
+
+`secretsmanager:PutSecretValue` and `UpdateSecret` are deliberately absent.
+The stack generates `SESSION_SECRET` with `GenerateSecretString` and nothing
+ever overwrites it. Write access to that secret would let the holder set a
+known signing key and forge a session cookie for any user.
+
+### Everything else
+
+Scoped to `smogwise-*` resources wherever AWS supports resource-level
 permissions. Four places cannot be scoped and are granted on `*`:
 `cloudformation:ListStacks`, `ecr:GetAuthorizationToken`,
 `secretsmanager:GetRandomPassword`, and the CloudFront actions, because
 CloudFront has no resource-level permissions for distribution creation.
-
-IAM permissions are listed action by action rather than as `iam:*`, and are
-restricted to role names beginning `smogwise-`. A deployment identity that can
-create arbitrary roles can grant itself anything.
 
 This is a deployment identity. The running service uses the App Runner
 instance role from `04-backend.yaml`, which is far narrower: no `Scan`, no

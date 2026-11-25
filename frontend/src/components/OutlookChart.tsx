@@ -17,7 +17,11 @@ function hourLabel(iso: string): string {
   });
 }
 
-/** Scale ceiling: the top of the band containing the worst value. */
+/**
+ * Scale ceiling: the next multiple of 50 above the worst value, held between
+ * 100 and 500. Deliberately not the enclosing AQI band top, which would jump
+ * the axis to 300 for a peak of 210 and flatten the whole series.
+ */
 function ceilingFor(values: number[]): number {
   const peak = Math.max(...values, 50);
   return Math.min(Math.max(Math.ceil(peak / 50) * 50, 100), 500);

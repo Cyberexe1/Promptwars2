@@ -38,6 +38,33 @@ Written plainly, because a reviewer finding these unlisted is worse than reading
 
 **`MinSize: 1` on App Runner.** Avoids cold starts, bills while idle. The dominant running cost.
 
+**Session cookies will not survive a cross-site fetch in the current
+deployment.** The frontend is on CloudFront and the API on App Runner, which
+are different sites, and the session cookie is `SameSite=Lax`. A browser will
+not attach it to the frontend's `fetch`, so a signed-in user can appear signed
+out. The live smoke tests do not catch this because `curl` ignores SameSite
+entirely. The fix is a CloudFront `/api` behaviour so both share an origin, not
+`SameSite=None`, which would discard a real CSRF defence.
+
+**Emission-reducing advice is crowded out exactly when it matters.** Of 22
+catalogue entries only four clearly reduce emissions rather than exposure:
+`move-off-biomass`, `swap-car-trips`, `no-waste-burning`, `no-idling`. All but
+the first rank below every protective item, and the selector fills the plan by
+priority. At a high AQI reading a car-commuting household typically gets one
+emission item out of six; at a clean reading they get more. The app therefore
+gives its best sustainability advice when the air is already good. Nothing in
+the test matrix asserts otherwise, so this is unguarded as well as unfixed.
+
+**`cleanestHour` is computed, displayed, and then ignored by the advice.**
+`domain/outlook.ts` works out the cleanest and worst hours ahead and the chart
+shows them, but `shift-outdoor-activity` still says "the early afternoon" as a
+fixed string, and the hourly series is never sent to the model. On a flat
+series, which is common in severe smog, that advice is unusable and the app has
+the data to know it.
+
+**`budget` barely does anything.** It is read once in the whole domain layer,
+to offer a low-cost filter build. `medium` and `high` produce identical plans.
+
 ## Accuracy
 
 **Impact statements are estimates, not measurements.** They describe a mechanism and a direction, with an evidence rating of well established, reasonably supported, or limited. No percentage is claimed anywhere, and a test asserts that no catalogue entry contains one. The application has no sensor on anyone's street.

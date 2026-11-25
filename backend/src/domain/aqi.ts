@@ -100,11 +100,6 @@ export function bandForAqi(aqi: number): AqiBand {
   return match ?? AQI_BANDS[AQI_BANDS.length - 1]!;
 }
 
-export function bandForLevel(level: RiskLevel): AqiBand {
-  const match = AQI_BANDS.find((band) => band.level === level);
-  return match ?? AQI_BANDS[0]!;
-}
-
 interface Pm25Breakpoint {
   concentrationLow: number;
   concentrationHigh: number;

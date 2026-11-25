@@ -33,6 +33,17 @@ Parameters:
       Comma-separate multiple origins. Must not be '*'.
     Default: http://localhost:5173
 
+  RoleBoundaryPolicyName:
+    Type: String
+    Description: >
+      Name of the permissions-boundary policy applied to the roles this stack
+      creates. Caps what those roles can ever do, so a wide inline policy on
+      them grants nothing extra. Create it from
+      infrastructure/role-boundary-policy.json first. Leave empty only if the
+      deploying identity is not restricted by deploy-policy.json, which
+      requires this boundary on CreateRole.
+    Default: smogwise-role-boundary
+
   Cpu:
     Type: String
     AllowedValues: ['0.25 vCPU', '0.5 vCPU', '1 vCPU', '2 vCPU', '4 vCPU']
@@ -71,6 +82,7 @@ Parameters:
 Conditions:
   HasBedrockModel: !Not [!Equals [!Ref BedrockModelId, '']]
   HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, '']]
+  HasRoleBoundary: !Not [!Equals [!Ref RoleBoundaryPolicyName, '']]
 
 Resources:
   # -------------------------------------------------------------------------
@@ -100,6 +112,10 @@ Resources:
   EcrAccessRole:
     Type: AWS::IAM::Role
     Properties:
+      PermissionsBoundary: !If
+        - HasRoleBoundary
+        - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/${RoleBoundaryPolicyName}'
+        - !Ref AWS::NoValue
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -115,6 +131,10 @@ Resources:
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
+      PermissionsBoundary: !If
+        - HasRoleBoundary
+        - !Sub 'arn:${AWS::Partition}:iam::${AWS::AccountId}:policy/${RoleBoundaryPolicyName}'
+        - !Ref AWS::NoValue
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -129,16 +149,17 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  # The code issues GetCommand and PutCommand and nothing
+                  # else. UpdateItem, DeleteItem and Query were granted and
+                  # never used, which meant a compromised container could
+                  # delete every account record rather than only read one.
                   - dynamodb:GetItem
                   - dynamodb:PutItem
-                  - dynamodb:UpdateItem
-                  - dynamodb:DeleteItem
-                  - dynamodb:Query
                 Resource:
                   - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDbTableName}'
-                  - !Sub 'arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${DynamoDbTableName}/index/*'
-              # Deliberately absent: Scan, DeleteTable, and any table-level
-              # administration. The application has no need for them.
+              # Deliberately absent: Scan, Query, UpdateItem, DeleteItem,
+              # DeleteTable, and any table-level administration. Index access
+              # is gone too, because no secondary index is queried.
 
         - PolicyName: ReadSessionSecret
           PolicyDocument:
@@ -158,9 +179,18 @@ Resources:
                 - Effect: Allow
                   # Converse maps onto InvokeModel. Streaming is not used.
                   Action: bedrock:InvokeModel
+                  # Scoped to the one configured model. A wildcard here handed
+                  # a compromised container a billable inference endpoint for
+                  # every model enabled in the account.
+                  #
+                  # The inference-profile entry is prefix-wildcarded because a
+                  # cross-region profile id carries a region prefix, as in
+                  # us.amazon.nova-pro-v1:0. If an AccessDeniedException on
+                  # InvokeModel appears after a model change, this pair is the
+                  # first thing to check.
                   Resource:
-                    - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/*'
-                    - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*'
+                    - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}::foundation-model/${BedrockModelId}'
+                    - !Sub 'arn:${AWS::Partition}:bedrock:${AWS::Region}:${AWS::AccountId}:inference-profile/*${BedrockModelId}'
           - !Ref AWS::NoValue
 
   # -------------------------------------------------------------------------

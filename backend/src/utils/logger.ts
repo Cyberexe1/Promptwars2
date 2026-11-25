@@ -1,10 +1,10 @@
 /**
  * Minimal structured logger.
  *
- * Privacy rule: this logger must never receive precise coordinates, health
- * preferences, or credentials. Callers log coarse facts only (route, status,
- * duration, error code). `redact` is provided for the few places that need to
- * reference a location at all.
+ * Privacy rule: this logger must never receive coordinates, email addresses,
+ * health preferences, tokens, or credentials. Callers log coarse facts only:
+ * route, status, error code, and counts. No call site anywhere needs to name a
+ * location, so there is no helper for doing it safely.
  */
 type LogLevel = 'info' | 'warn' | 'error';
 
@@ -31,14 +31,6 @@ function emit(level: LogLevel, message: string, fields: LogFields = {}): void {
     return;
   }
   console.log(line);
-}
-
-/**
- * Reduces a coordinate to roughly city-block precision so that logs can show
- * an approximate area for debugging without recording a home address.
- */
-export function redactCoordinate(value: number): string {
-  return value.toFixed(1);
 }
 
 export const logger = {

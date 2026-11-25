@@ -1,11 +1,11 @@
 import type { ErrorRequestHandler, RequestHandler } from 'express';
-import { AppError } from '../utils/errors.js';
+import { AppError, notFound } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 
-export const notFoundHandler: RequestHandler = (_req, res) => {
-  res.status(404).json({
-    error: { code: 'NOT_FOUND', message: 'This endpoint does not exist.' },
-  });
+// Goes through `notFound` and the error handler rather than building a body
+// here, so there is one place that decides what an error response looks like.
+export const notFoundHandler: RequestHandler = (_req, _res, next) => {
+  next(notFound('This endpoint does not exist.'));
 };
 
 /**

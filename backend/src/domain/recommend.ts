@@ -28,7 +28,14 @@ export interface RulesPlan {
   recommendations: Recommendation[];
 }
 
-function toRecommendation(item: CatalogueItem): Recommendation {
+/**
+ * Projects a catalogue entry onto the wire shape, dropping the `applies`
+ * predicate and `priority`, which are selection concerns the client never sees.
+ *
+ * Exported because the planner needs the same projection as its baseline
+ * before model wording is merged on top. Two copies drifted apart once.
+ */
+export function toRecommendation(item: CatalogueItem): Recommendation {
   return {
     id: item.id,
     category: item.category,

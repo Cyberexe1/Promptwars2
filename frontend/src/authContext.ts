@@ -5,7 +5,7 @@ import type { AuthUser } from './auth';
  * The auth context and its hook, kept apart from the provider component.
  *
  * A file that exports both a component and a hook breaks React Fast Refresh,
- * so the provider lives in `AuthContext.tsx` and the shared values live here.
+ * so the provider lives in `AuthProvider.tsx` and the shared values live here.
  */
 
 /**

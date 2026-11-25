@@ -45,12 +45,14 @@ export function LoginPage() {
       setError('Enter your email address.');
       return;
     }
-    if (creating && password.length < MIN_PASSWORD_LENGTH) {
-      setError(`Choose a password of at least ${MIN_PASSWORD_LENGTH} characters.`);
-      return;
-    }
+    // Empty first: telling someone who typed nothing that they need twelve
+    // characters answers a question they did not ask.
     if (!password) {
       setError('Enter your password.');
+      return;
+    }
+    if (creating && password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Choose a password of at least ${MIN_PASSWORD_LENGTH} characters.`);
       return;
     }
 
@@ -161,7 +163,9 @@ export function LoginPage() {
 
         <p className="hint auth-note">
           We store only your email address and a hashed password. Your
-          household answers and saved plans never reach our server. See{' '}
+          household answers are sent with the request that builds your plan,
+          but are never written to a database or a log. Saved plans stay on
+          this device and never reach our server. See{' '}
           <Link to="/privacy">how your data is handled</Link>.
         </p>
       </div>

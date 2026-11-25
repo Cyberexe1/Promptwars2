@@ -2,7 +2,14 @@
     Runs one deployment step at a time, so a failure is diagnosable instead of
     leaving a half-finished run to unpick.
 
-    Usage: ./step.ps1 <ecr|data|image|backend|frontend|publish|verify|status>
+    Usage: ./step.ps1 <ecr|data|image|backend|frontend|cors|publish|verify|status>
+
+    WARNING: this overlaps deploy.ps1 and has drifted from it. The `backend`
+    and `cors` steps pass an empty BedrockModelId, so running either after
+    enable-bedrock.ps1 removes Bedrock from the live service and drops
+    bedrock:InvokeModel from the instance role. The `frontend` step omits
+    ApiOrigin, which widens the CSP connect-src that deploy.ps1 narrows.
+    Prefer deploy.ps1 unless you specifically need one stage in isolation.
 #>
 param([Parameter(Mandatory = $true)][string]$Step)
 

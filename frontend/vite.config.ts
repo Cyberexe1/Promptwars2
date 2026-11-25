@@ -34,6 +34,12 @@ export default defineConfig({
     // longer when all test files run at once. The 5000ms default made the
     // accessibility suite fail intermittently on timing alone.
     testTimeout: 20000,
+    // One jsdom environment per file is the isolation we want, but the default
+    // worker count stands up 15 of them at once and exhausted memory on a
+    // machine with little free disk to page to. The failure surfaces as
+    // "Worker exited unexpectedly", which reads like a broken test rather than
+    // a resource limit, so correctness of the signal is worth the extra time.
+    maxWorkers: 4,
     // Needed so `?raw` stylesheet imports resolve to their contents. With the
     // default of false they resolve to an empty string, which would let the
     // stylesheet guard tests pass without checking anything.

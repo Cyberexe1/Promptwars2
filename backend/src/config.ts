@@ -30,13 +30,16 @@ const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   CORS_ALLOWED_ORIGINS: z.string().default('http://localhost:5173'),
+  // `.url()`, not `.min(1)`: both values are handed to `new URL()` on the
+  // first request that needs them, so a non-URL has to fail here or the
+  // "fails immediately at startup" promise above is not kept.
   GEOCODING_API_URL: z
     .string()
-    .min(1)
+    .url()
     .default('https://geocoding-api.open-meteo.com/v1/search'),
   AIR_QUALITY_API_URL: z
     .string()
-    .min(1)
+    .url()
     .default('https://air-quality-api.open-meteo.com/v1/air-quality'),
   UPSTREAM_TIMEOUT_MS: z.coerce.number().int().min(500).max(30000).default(6000),
   AWS_REGION: z.string().min(1).default('us-east-1'),

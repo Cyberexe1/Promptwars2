@@ -36,7 +36,7 @@ const airQualityResponseSchema = z.object({
     nitrogen_dioxide: measurement,
     ozone: measurement,
   }),
-  // Optional: the outlook is a enhancement, so a provider that omits the
+  // Optional: the outlook is an enhancement, so a provider that omits the
   // hourly series must still yield a usable current reading.
   hourly: z
     .object({
@@ -147,8 +147,9 @@ export async function getCurrentAirQuality(
     : undefined;
 
   if (config.aqiCacheTtlSeconds > 0) {
-    // Not awaited for correctness: a cache write must never delay or fail the
-    // response the user is waiting for.
+    // Not awaited, so a slow cache write cannot delay the response. Both
+    // implementations already swallow their own errors, so the `void` is about
+    // latency only and is not what makes a failed write harmless.
     void cache.put(cacheKey, { current, source, ...(outlook ? { outlook } : {}) });
   }
 

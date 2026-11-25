@@ -99,7 +99,9 @@ export function LocationPicker({ selected, onSelect }: LocationPickerProps) {
   const searching = searchable && !answered && !failed;
   const showEmptyState = answered && results.length === 0;
 
-  function useMyLocation() {
+  // Not `useMyLocation`: the `use` prefix is reserved for hooks, and this is a
+  // click handler that must not run during render.
+  function handleUseMyLocation() {
     if (!('geolocation' in navigator)) {
       setGeolocationError(
         'This browser cannot share your location. Please search instead.',
@@ -162,7 +164,7 @@ export function LocationPicker({ selected, onSelect }: LocationPickerProps) {
       <button
         type="button"
         className="button button-secondary"
-        onClick={useMyLocation}
+        onClick={handleUseMyLocation}
         disabled={locating}
       >
         {locating ? 'Finding your location…' : 'Use my current location'}

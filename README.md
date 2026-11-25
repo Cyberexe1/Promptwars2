@@ -33,15 +33,21 @@ SmogWise converts air-quality and lifestyle context into a safe, realistic daily
 
 ### Personalized daily routines
 
-Recommendations consider:
+Recommendations consider seven household inputs, defined in
+[`backend/src/schemas.ts`](backend/src/schemas.ts):
 
-- Commute method and schedule.
-- School and work timings.
-- Outdoor exercise habits.
-- Household size and age groups.
-- Respiratory or cardiovascular sensitivity.
-- Cooking and heating methods.
-- Budget and access to air purifiers or public transport.
+- Commute method: car, motorbike, public transport, walking, cycling, or working from home.
+- Daily minutes spent outdoors.
+- Age groups present in the household.
+- Respiratory or cardiovascular sensitivity, pregnancy, or an adult over 65.
+- Cooking fuel, including biomass and other solid fuels.
+- Whether the household owns an air purifier.
+- Budget for changes.
+
+Not inputs, despite being natural things to ask for: commute or school
+*schedule*, household size, and heating method. The app has no time-of-day
+field, so it cannot tailor advice to when someone actually travels. `budget`
+currently only distinguishes `low` from the rest.
 
 Example suggestions include changing outdoor activity times, choosing lower-traffic routes, combining errands, using public transport or carpooling, avoiding waste burning, and ventilating the home when outdoor pollution is lower.
 
@@ -64,7 +70,16 @@ Each suggestion explains:
 - **Cost and effort level**
 - **Confidence and data limitations**
 
-Impact statements use rule-based calculations or cited reference factors where possible. The interface labels estimates clearly and avoids presenting them as exact measurements.
+Impact statements describe a mechanism and a direction, each with an evidence
+rating of well established, reasonably supported, or limited. They are
+reviewed prose, not calculations: there is no emission factor or arithmetic
+anywhere in the codebase, and no percentage is claimed. A test asserts that no
+catalogue entry contains one.
+
+That is a deliberate limit and also a real gap. Saying "roughly in proportion
+to the time you avoid" is honest but less useful than a cited reference factor
+would be. Adding quantified impact means sourcing defensible factors per
+action, which is research this project has not done.
 
 ### Community mode
 
@@ -325,8 +340,12 @@ Use a single table with partition and sort keys where practical.
 | `GET` | `/api/locations` | City search by name | Built |
 | `GET` | `/api/air-quality` | Return normalized AQI and source metadata | Built |
 | `POST` | `/api/recommendations` | Generate a personalized, validated daily plan | Built |
-| `GET` | `/api/plans` | List a signed-in user's saved plans | Phase 3 |
-| `DELETE` | `/api/plans/:id` | Delete a saved plan | Phase 3 |
+
+Saved-plan endpoints were planned and deliberately not built. A plan summary
+can disclose that someone in the household is medically sensitive, so plans
+stay in browser local storage and never reach a server. The
+`USER#<userId>`/`PLAN#<timestamp>` and `COMMUNITY#<id>` key designs above are
+therefore unused: DynamoDB holds accounts and the air-quality cache only.
 
 All write endpoints validate input, limit payload size, and enforce rate limits. The saved-plan endpoints will additionally require authentication. See [`backend/README.md`](backend/README.md) for request and response shapes.
 
@@ -393,7 +412,7 @@ All write endpoints validate input, limit payload size, and enforce rate limits.
 
 - [x] Finalize the target users, supported locations, and AQI standard. US EPA AQI, with PM2.5 breakpoints per the May 2024 revision.
 - [x] Select an air-quality data provider and confirm its usage terms. Open-Meteo, free and keyless.
-- [x] Define the recommendation catalogue, risk bands, safety rules, and impact factors. 20 reviewed entries in `backend/src/domain/catalogue.ts`.
+- [x] Define the recommendation catalogue, risk bands, and safety rules. 22 reviewed entries in `backend/src/domain/catalogue.ts` (7 routine, 8 indoor, 4 transport, 3 health). No impact factors: see [Impact explanations](#impact-explanations).
 - [x] Define API contracts and structured GenAI response schemas.
 - [ ] Create accessible wireframes for mobile and desktop layouts. Skipped: built the responsive layout directly and verified it with accessibility tests.
 
@@ -497,7 +516,7 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 - [x] Add saved plans and user-controlled deletion. Device-local, with single and bulk delete behind a confirmation
 - [x] Add accounts. Built directly rather than with Cognito: signup and login over a scrypt hash and a signed httpOnly cookie, which avoids a hosted UI and a second user directory for no capability this app needs. Plans still stay on the device.
 - [x] Add community checklists that contain no private household or health data. Subtractive by design, asserted by tests
-- [x] Refine low-emission routines, indoor air-quality guidance, and sustainable alternatives. 20 reviewed catalogue entries across four categories
+- [x] Refine low-emission routines, indoor air-quality guidance, and sustainable alternatives. 22 reviewed catalogue entries across four categories. **Known weakness:** only 4 of the 22 reduce emissions rather than exposure, and they rank below every protective item, so they are crowded out at high AQI. See [`docs/limitations.md`](docs/limitations.md)
 - [x] Show the method, source, and uncertainty behind impact estimates. Every card carries an evidence rating; no entry claims a percentage
 - [x] Add general guidance for stale or unavailable live AQI data. Readings over three hours old are flagged; a missing reading reports `Unknown` with precautionary advice
 - [ ] Add optional localization and plain-language content where time permits. **Not done.** English only, which is a real barrier in the worst-affected cities
