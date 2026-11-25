@@ -135,7 +135,7 @@ Verified against the running deployment:
 
 ## Current Status
 
-**All three phases are complete and deployed.** 454 tests pass with enforced coverage floors, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the stack is live on AWS. What remains needs a human: a manual screen-reader pass, real-device testing, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
+**All three phases are complete and deployed.** 477 tests pass with enforced coverage floors, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the stack is live on AWS. What remains needs a human: a manual screen-reader pass, real-device testing, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
 
 | Area | State |
 |---|---|
@@ -145,7 +145,7 @@ Verified against the running deployment:
 | Saved plans | Built, device-local with user-controlled deletion |
 | Community checklist | Built, household and health details stripped |
 | React frontend | 246 tests passing, 94% statement coverage |
-| Node.js API | 208 tests passing, 84% statement coverage |
+| Node.js API | 231 tests passing, 85% statement coverage |
 | 24-hour outlook | Names the cleanest and worst hours ahead, so "shift your outdoor time" is actionable |
 | Live air-quality data | Working against Open-Meteo, no API key required |
 | Risk and recommendation rules | Complete, verified over 1,000+ household and band combinations |
@@ -155,7 +155,7 @@ Verified against the running deployment:
 | Container image | Dockerfile builds, multi-stage, non-root |
 | AWS infrastructure | 5 CloudFormation templates, all passing `cfn-lint` |
 | CI/CD | 3 workflows, 8 jobs, OIDC, dependency + container + secret scanning |
-| Deployed to AWS | **Not yet run.** Needs your AWS account. See [`infrastructure/README.md`](infrastructure/README.md) |
+| Deployed to AWS | **Live.** Backend on App Runner, frontend on CloudFront, verified end to end |
 
 ### Documentation
 
@@ -338,7 +338,8 @@ All write endpoints validate input, limit payload size, and enforce rate limits.
 - Encrypt traffic with HTTPS and data at rest with AWS-managed encryption or customer-managed KMS keys where required.
 - Restrict CORS to the deployed frontend origin.
 - Validate and normalize every API request.
-- Apply request-size limits and rate limiting.
+- Apply request-size limits and rate limiting, both per client address and per account on the login route, so an attacker with many addresses still cannot grind one account.
+- Require a double-submit CSRF token and a matching origin on every state-changing request.
 - Redact precise locations, health preferences, tokens, and API keys from logs.
 - Pin dependencies, run dependency scanning, and keep the base container image updated.
 - Avoid storing exact coordinates unless the feature requires them and the user consents.
@@ -361,6 +362,8 @@ All write endpoints validate input, limit payload size, and enforce rate limits.
 - Limit Bedrock prompt size and request structured JSON output.
 - Generate a new AI response only when relevant context changes.
 - Set API timeouts and retries with exponential backoff for transient upstream failures.
+- Gzip API responses. A plan response goes from about 1,878 bytes to 575.
+- Split the bundle by route, so a first visit to the landing page does not download the dashboard.
 
 ## Testing Strategy
 
@@ -478,10 +481,10 @@ Everything below is written and validated locally. Applying it to a live AWS acc
 - [x] Add a container smoke test to CI. CI starts the image and polls `/health`
 - [x] Add a repository-wide secret scan to CI. Gitleaks across full history
 - [x] Confirm that no API key, token, precise location, or health preference appears in client code or logs. Asserted by tests
-- [ ] Run deployed API integration tests and frontend smoke tests. Scripted in both deploy workflows; awaiting a real deployment
-- [ ] Verify HTTPS, CORS, cache headers, and security headers against the live distribution. Requires a real deployment
+- [x] Run deployed API integration tests and frontend smoke tests. `infrastructure/audit-live.ps1` and `smoke-auth-live.ps1` pass against the live stack
+- [x] Verify HTTPS, CORS, cache headers, and security headers against the live distribution. HSTS, CSP, `X-Frame-Options`, and `X-Content-Type-Options` confirmed served; a rogue origin gets 403
 
-**Phase 2 deliverable: code complete, not yet applied.** Five CloudFormation templates pass `cfn-lint`, the container image builds, and three workflows pass structural validation. What remains is running the runbook against an AWS account, which I have deliberately not done on your behalf.
+**Phase 2 deliverable: met and deployed.** Five CloudFormation templates pass `cfn-lint`, the container image builds and runs, three workflows pass structural validation, and all four stacks are live in `us-east-1`.
 
 One finding worth your attention: AWS moved **App Runner into maintenance mode on 31 March 2026** and closed it to new customers on 30 April 2026 ([AWS notice](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html)). You asked for App Runner and the template targets it, which works for accounts that already used the service. If yours did not, AWS directs new accounts to Amazon ECS Express Mode; only the compute service would change, and the container, registry, database, and frontend stacks stay exactly as they are.
 
@@ -535,11 +538,11 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 │   │   ├── domain/           # AQI bands, risk rules, recommendation catalogue
 │   │   ├── services/         # Upstream calls, Bedrock, plan assembly
 │   │   ├── routes/           # HTTP endpoints
-│   │   ├── middleware/       # Error handling
+│   │   ├── middleware/       # Errors, CSRF, session, per-account login throttle
 │   │   ├── utils/            # Errors and logging
 │   │   ├── app.ts            # Express app, exported for tests
 │   │   └── server.ts         # Listener and shutdown
-│   ├── tests/                # 139 Vitest tests
+│   ├── tests/                # 231 Vitest tests
 │   └── .env.example
 │   ├── Dockerfile            # Multi-stage, non-root runtime
 │   └── .env.example
@@ -553,7 +556,7 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 │   │   ├── community.ts      # Shareable checklist, household data stripped
 │   │   ├── api.ts            # API client
 │   │   └── types.ts          # Contract types
-│   └── src/**/*.test.{ts,tsx}  # 126 Vitest tests
+│   └── src/**/*.test.{ts,tsx}  # 246 Vitest tests
 ├── docs/
 │   ├── architecture.md       # System shape, request flow, design decisions
 │   └── limitations.md        # What is unverified and why
@@ -581,6 +584,6 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 - [x] The README explains the vertical, approach, logic, operation, and assumptions.
 - [x] Setup, test, and deployment instructions are verified. Every local command was run; deployment commands are scripted but unapplied
 - [x] No credentials, tokens, personal information, or `.env` files are committed. Only `.env.example`; CI also runs Gitleaks over full history
-- [x] The application includes tests and accessibility checks. 389 tests, including axe on every route
+- [x] The application includes tests and accessibility checks. 477 tests, including axe on every route and 40 computed contrast assertions
 - [ ] The video is unlisted on YouTube or shared through a publicly accessible Drive link.
 - [ ] The public GitHub repository URL is submitted within the allowed three attempts.

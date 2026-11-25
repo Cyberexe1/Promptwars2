@@ -6,16 +6,21 @@ Written plainly, because a reviewer finding these unlisted is worse than reading
 
 | Item | Status | Why |
 |---|---|---|
-| Live AWS deployment | **Never run** | Needs the owner's AWS account. Templates pass `cfn-lint`; nothing has been applied. |
-| Container runtime | Image builds, run not verified locally | Docker Desktop's daemon was unavailable at the end of the build. CI starts the image and polls `/health` on every push. |
-| Colour contrast, automated | Not checked | axe's contrast rule needs a canvas, which jsdom does not implement, so it is silently skipped. Values were chosen by hand against WCAG 2.2 AA; body text is `#1b2a33` on `#f6f8f9`, above 13:1. |
 | Screen-reader behaviour | Not tested | Structure, labelling, and live regions are asserted by tests. Actual NVDA, JAWS, and VoiceOver passes need a human. |
-| Real-device mobile testing | Not done | Layouts are responsive and tested at jsdom level only. |
-| Bedrock output quality | Not assessed | The integration, schema validation, and fallback are tested with mocks. No real model response has been reviewed, because no model id is configured. |
+| Real-device mobile testing | Not done | Layouts are responsive and tested at jsdom level only. No real phone or tablet has loaded the deployed site. |
+| Browser end-to-end tests | Not written | The full journey is covered at component level with `fetch` stubbed. A real browser driver was not installed; the development machine had under 6 GB free. |
+| Bedrock output quality at scale | Spot-checked only | The live model path is verified working and its output is schema-validated and bounded. A handful of responses have been read, not a reviewed sample across bands and household shapes. |
+| Load and concurrency behaviour | Not measured | No load test has run against the deployed service. Capacity is a single App Runner instance with autoscaling configured but never exercised. |
 
 ## Deliberate constraints
 
 **App Runner is in maintenance mode.** AWS closed it to new customers on 30 April 2026 and plans no new features ([AWS notice](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html)). The template targets it because it was the requested platform, and it still works for accounts that used the service before that date. An ineligible account needs Amazon ECS Express Mode instead; only the compute service changes. The eligibility check is the first thing in [`infrastructure/README.md`](../infrastructure/README.md).
+
+**Login throttle state is per instance.** Failed attempts are counted per account in process memory, so with more than one instance running an attacker gets one budget per instance. Making it global means a DynamoDB write on every failed attempt. The per-address rate limiter stays as the backstop, and the single-instance configuration means this is currently exact.
+
+**There is no AWS WAF.** CloudFront and App Runner are protected by application-level rate limiting, CORS, and request-size caps, not by a managed rule set. A WAF would add rate-based blocking at the edge and common-attack rules; it costs about $6 per month plus per-request charges, which was not justified for a demo.
+
+**Request and response shapes are duplicated by hand.** The frontend declares its own types matching the backend's Zod schemas. Nothing fails the build if the two drift apart; a shared package or generated types would close that gap.
 
 **Sessions cannot be revoked server-side.** Tokens are stateless and HMAC-signed, so logging out clears the cookie but cannot invalidate a copy taken beforehand. Tokens expire after seven days and carry a token id, so a denylist can be added if immediate revocation becomes a requirement. Rotating `SESSION_SECRET` invalidates every session at once, which is the emergency control.
 
@@ -55,8 +60,8 @@ Written plainly, because a reviewer finding these unlisted is worse than reading
 
 ## Testing boundaries
 
-265 tests pass and none touch the network: upstream services are mocked in the backend, `fetch` is stubbed in the frontend, and the Bedrock client is never constructed.
+477 tests pass and none touch the network: upstream services are mocked in the backend, `fetch` is stubbed in the frontend, and the Bedrock client is never constructed.
 
-That is also the limit. These tests prove the code behaves as written against fixtures. They do not prove that Open-Meteo's response shape is still what the schema expects, that Bedrock returns usable prose, or that CloudFront serves the headers the template specifies. The deploy workflows include smoke tests for exactly that reason, and those have not run.
+That is also the limit. These tests prove the code behaves as written against fixtures. They do not prove that Open-Meteo's response shape is still what the schema expects, that Bedrock returns usable prose, or that CloudFront serves the headers the template specifies. Scripts in [`infrastructure/`](../infrastructure/) check those against the deployed stack instead: `audit-live.ps1` asserts health, live readings, signup, CORS rejection, SPA fallback, and security headers; `verify-bedrock.ps1` confirms a plan came back from the model rather than the rules fallback; `verify-throttle.ps1` drives the login throttle to 429. They have been run against the live deployment and pass.
 
 The strongest single test is the matrix in `recommend.test.ts`: over 1,000 combinations of household shape and air-quality band, asserting every plan is usable, free of duplicates, and free of self-contradiction such as advising both opening and closing windows.

@@ -19,6 +19,7 @@ import { getUserStore, normaliseEmail } from '../services/users.js';
 import { AppError, badRequest } from '../utils/errors.js';
 import { logger } from '../utils/logger.js';
 import { requireUser } from '../middleware/requireAuth.js';
+import { LoginThrottle } from '../middleware/loginThrottle.js';
 import type { AppConfig } from '../config.js';
 
 /**
@@ -64,6 +65,10 @@ const credentialsSchema = z.object({
  */
 export function createAuthRouter(config: AppConfig): Router {
   const authRouter = Router();
+
+  // Scoped to this router instance so each app in a test suite gets its own,
+  // rather than sharing counters through a module-level singleton.
+  const throttle = new LoginThrottle();
 
   /**
    * Tight limit on credential endpoints, independent of the general API
@@ -132,6 +137,19 @@ export function createAuthRouter(config: AppConfig): Router {
     }
 
     const { email, password } = parsed.data;
+
+    // Per-account throttle, checked before any work is done. Applies whether
+    // or not the account exists, so the response cannot be used to tell.
+    if (throttle.isBlocked(email)) {
+      logger.info('login_throttled');
+      res.setHeader('Retry-After', String(throttle.retryAfterSeconds(email)));
+      throw new AppError(
+        429,
+        'TOO_MANY_ATTEMPTS',
+        'Too many sign-in attempts for this account. Please wait a few minutes and try again.',
+      );
+    }
+
     const user = await getUserStore().findByEmail(normaliseEmail(email));
 
     // Verify against a dummy hash when no user exists, so a missing account
@@ -142,9 +160,13 @@ export function createAuthRouter(config: AppConfig): Router {
     const ok = await verifyPassword(password, reference);
 
     if (!user || !ok) {
+      throttle.recordFailure(email);
       logger.info('login_failed');
       throw new AppError(401, 'INVALID_CREDENTIALS', INVALID_CREDENTIALS);
     }
+
+    // A correct password clears the record, so normal use is never penalised.
+    throttle.recordSuccess(email);
 
     res.cookie(
       SESSION_COOKIE,

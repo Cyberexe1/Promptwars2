@@ -109,7 +109,8 @@ When the provider returns neither `us_aqi` nor `pm2_5`, the service does not gue
 
 - Input validated with Zod at every entry point, including coordinate ranges, enum values, text length, and control characters.
 - 16 kB request body ceiling; oversized bodies return 403 or 413, never 500.
-- Rate limiting on `/api` (60 requests per minute by default).
+- Rate limiting on `/api` (60 requests per minute by default), with a much tighter limit on the credential routes.
+- Per-account login throttling on top of the per-address limit: 8 failures for one email address within 15 minutes and further attempts get 429 with `Retry-After`, no matter which addresses they come from. A correct password clears the count. See [`src/middleware/loginThrottle.ts`](src/middleware/loginThrottle.ts) for why unregistered addresses are counted too.
 - CORS restricted to an explicit allowlist. A disallowed origin returns 403, so it does not pollute unhandled-error logs.
 - `helmet` security headers; `x-powered-by` removed.
 - Upstream calls use `AbortSignal` timeouts, refuse redirects, and cap response size.
@@ -119,9 +120,15 @@ When the provider returns neither `us_aqi` nor `pm2_5`, the service does not gue
 - The only secret is `SESSION_SECRET`, generated into Secrets Manager by the stack and injected by App Runner at start-up. The server refuses to start in production without it, rather than signing sessions with a weak or ephemeral key.
 - No third-party API keys exist. AWS credentials come from the standard provider chain, which is the App Runner instance role in production.
 
+## Performance
+
+- Air-quality readings are cached in DynamoDB on a 1 km grid with a 600-second TTL, so neighbours asking at the same time share one upstream call. A cache failure degrades to a direct fetch rather than an error.
+- Responses are gzip-compressed. A plan response drops from about 1,878 bytes to 575, which is what matters on the mobile connections this app is built for.
+- Upstream calls have abort timeouts and a response-size cap, so a slow provider cannot hold a request open indefinitely.
+
 ## Tests
 
-113 tests, no network access. Both upstream services are mocked and the Bedrock client is never constructed.
+231 tests, no network access. Both upstream services are mocked and the Bedrock client is never constructed.
 
 | File | Covers |
 |---|---|
@@ -133,6 +140,7 @@ When the provider returns neither `us_aqi` nor `pm2_5`, the service does not gue
 | `tests/outlook.test.ts` | Past hours dropped, window limits, gaps, ties, flat forecasts |
 | `tests/cache.test.ts` | Grid keys, expiry, eviction, failure degradation, what is stored |
 | `tests/auth.test.ts` | Hashing, token forgery and expiry, enumeration resistance, cookie flags, rate limiting, route protection |
+| `tests/loginThrottle.test.ts` | Per-account failure counting, window rollover, reset on success, eviction bound, `Retry-After` value |
 
 The matrix test in `recommend.test.ts` is the main safety guarantee: for every household shape at every band it asserts a usable plan with no self-contradicting advice, such as recommending both opening and closing windows.
 

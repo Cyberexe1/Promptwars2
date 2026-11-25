@@ -16,10 +16,10 @@ export default defineConfig({
       // mostly live AWS client code, which would need the SDK mocked wholesale
       // to reach, and mock-only coverage of it would prove little.
       thresholds: {
-        statements: 84,
-        branches: 76,
-        functions: 86,
-        lines: 84,
+        statements: 85,
+        branches: 77,
+        functions: 87,
+        lines: 85,
       },
     },
   },

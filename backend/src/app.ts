@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
+import compression from 'compression';
 import rateLimit from 'express-rate-limit';
 import { config as defaultConfig, type AppConfig } from './config.js';
 import { apiRouter } from './routes/index.js';
@@ -27,6 +28,11 @@ export function createApp(config: AppConfig = defaultConfig): express.Express {
   app.disable('x-powered-by');
 
   app.use(helmet());
+
+  // Plan and outlook responses are several kilobytes of repetitive JSON, which
+  // compresses to roughly a quarter of its size. That matters most on the
+  // mobile connections this app is likely to be used on.
+  app.use(compression());
 
   app.use(
     cors({

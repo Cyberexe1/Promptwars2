@@ -30,6 +30,10 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}'],
     restoreMocks: true,
     clearMocks: true,
+    // An axe pass over a full page render takes several seconds in jsdom, and
+    // longer when all test files run at once. The 5000ms default made the
+    // accessibility suite fail intermittently on timing alone.
+    testTimeout: 20000,
     // Needed so `?raw` stylesheet imports resolve to their contents. With the
     // default of false they resolve to an empty string, which would let the
     // stylesheet guard tests pass without checking anything.
