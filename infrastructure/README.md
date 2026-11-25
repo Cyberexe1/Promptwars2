@@ -35,6 +35,56 @@ Nothing else in this project changes. The container, the image in ECR, the Dynam
 
 ---
 
+## Deployment permissions
+
+Run [`aws-check.ps1`](aws-check.ps1) first. It loads credentials from
+`backend/.env` under the names the CLI actually reads, then probes every
+service the deployment touches, read-only.
+
+```powershell
+./aws-check.ps1
+```
+
+A narrowly scoped identity will show denials like these, which is what an
+S3-upload user from another project looks like:
+
+```text
+App Runner        OK             backend service
+CloudFormation    ACCESS DENIED  every stack
+ECR               ACCESS DENIED  container image
+CloudFront        ACCESS DENIED  frontend delivery
+Secrets Manager   ACCESS DENIED  session secret
+```
+
+[`deploy-policy.json`](deploy-policy.json) grants exactly what the deployment
+needs. Attach it with an account administrator, not with the deploying
+identity itself:
+
+```bash
+aws iam create-policy \
+  --policy-name SmogWiseDeploy \
+  --policy-document file://infrastructure/deploy-policy.json
+
+aws iam attach-user-policy \
+  --user-name <your-deploy-user> \
+  --policy-arn arn:aws:iam::<account-id>:policy/SmogWiseDeploy
+```
+
+It is scoped to `smogwise-*` resources wherever AWS supports resource-level
+permissions. Four places cannot be scoped and are granted on `*`:
+`cloudformation:ListStacks`, `ecr:GetAuthorizationToken`,
+`secretsmanager:GetRandomPassword`, and the CloudFront actions, because
+CloudFront has no resource-level permissions for distribution creation.
+
+IAM permissions are listed action by action rather than as `iam:*`, and are
+restricted to role names beginning `smogwise-`. A deployment identity that can
+create arbitrary roles can grant itself anything.
+
+This is a deployment identity. The running service uses the App Runner
+instance role from `04-backend.yaml`, which is far narrower: no `Scan`, no
+table administration, and `bedrock:InvokeModel` only when a model is
+configured.
+
 ## Prerequisites
 
 - AWS CLI v2, authenticated with permission to create IAM, ECR, DynamoDB, App Runner, S3, and CloudFront resources.
