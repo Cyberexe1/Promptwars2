@@ -44,9 +44,16 @@ jobs:
       - name: Install, check, and build
         working-directory: frontend
         env:
-          # Baked into the bundle at build time, so it must point at the
-          # deployed API before the build runs.
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          # A slash, so every call is same-origin. CloudFront proxies /api/* to
+          # App Runner, which keeps the page and the API one site: the session
+          # and CSRF cookies are SameSite=Lax, and a browser withholds them
+          # from a cross-site request, which makes sign-up fail with a 403.
+          #
+          # Deliberately not taken from a repository variable. This used to be
+          # vars.VITE_API_URL, which holds the App Runner address, and running
+          # this workflow would have shipped a bundle that calls it directly
+          # and silently broken sign-in again.
+          VITE_API_URL: /
         run: |
           npm ci
           npm run lint
@@ -54,14 +61,18 @@ jobs:
           npm test
           npm run build
 
-      - name: Fail if the API URL was not baked in
+      - name: Fail if the bundle calls a backend directly
         working-directory: frontend
         run: |
           if grep -rq "localhost:3000" dist/assets; then
-            echo "The bundle still points at localhost. Set the VITE_API_URL variable."
+            echo "The bundle still points at localhost."
             exit 1
           fi
-          echo "API URL looks correct."
+          if grep -rq "awsapprunner.com" dist/assets; then
+            echo "The bundle calls App Runner directly. Session cookies would not be sent."
+            exit 1
+          fi
+          echo "Bundle is same-origin."
 
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v5
@@ -92,17 +103,39 @@ jobs:
             --no-progress
 
       # Remove files that are no longer part of the build, after the new ones
-      # are in place.
+      # are in place. The route shells published below are not in dist/, so
+      # they are excluded or this would delete them on every deployment.
       - name: Remove orphaned files
         working-directory: frontend
         run: |
-          aws s3 sync dist "s3://$FRONTEND_BUCKET" --delete --no-progress
+          EXCLUDES=()
+          while read -r route; do
+            [ -n "$route" ] && EXCLUDES+=(--exclude "$route")
+          done < ../infrastructure/spa-routes.txt
+          aws s3 sync dist "s3://$FRONTEND_BUCKET" --delete "${EXCLUDES[@]}" --no-progress
 
-      - name: Invalidate the CloudFront entry point
+      # Client-side routes are published as copies of the app shell, because
+      # the distribution no longer maps 403 to /index.html. Those custom error
+      # responses applied to every cache behaviour, so once the API shared the
+      # distribution they rewrote its 403 and 404 responses into 200s carrying
+      # HTML. The list is infrastructure/spa-routes.txt, and a backend test
+      # fails if it drifts from frontend/src/App.tsx.
+      - name: Publish the app shell at each client-side route
+        working-directory: frontend
+        run: |
+          while read -r route; do
+            [ -z "$route" ] && continue
+            aws s3 cp dist/index.html "s3://$FRONTEND_BUCKET/$route" \
+              --cache-control "no-cache,no-store,must-revalidate" \
+              --content-type "text/html; charset=utf-8" \
+              --no-progress
+          done < ../infrastructure/spa-routes.txt
+
+      - name: Invalidate the CloudFront cache
         run: |
           ID=$(aws cloudfront create-invalidation \
             --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
-            --paths "/" "/index.html" \
+            --paths "/*" \
             --query 'Invalidation.Id' --output text)
           echo "Invalidation $ID created."
           aws cloudfront wait invalidation-completed \

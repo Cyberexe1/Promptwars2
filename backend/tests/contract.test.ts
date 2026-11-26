@@ -73,6 +73,42 @@ describe('API types match between frontend and backend', () => {
   });
 });
 
+describe('client-side routes are published for direct loads', () => {
+  // The distribution serves a copy of the app shell at each route path,
+  // because it can no longer map 403 to /index.html: that mapping applies to
+  // every cache behaviour, so once the API joined the distribution it turned
+  // the API's own 403 and 404 responses into 200s carrying HTML. A route
+  // missing from the list works through in-app navigation and fails on a
+  // refresh or a shared link, which is exactly the kind of fault nobody sees
+  // until a user hits it.
+  const published = readFileSync(resolve(HERE, '../../infrastructure/spa-routes.txt'), 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .sort();
+
+  const declared = [...frontend('App.tsx').matchAll(/<Route\s+path="([^"]+)"/g)]
+    .map((match) => match[1]!)
+    // The root is index.html itself, and the wildcard is the not-found route.
+    .filter((path) => path !== '/' && path !== '*')
+    .map((path) => path.replace(/^\//, ''))
+    .sort();
+
+  it('finds the routes it is meant to compare', () => {
+    expect(declared.length).toBeGreaterThan(0);
+  });
+
+  it('publishes a shell for every route App.tsx declares', () => {
+    expect(published).toEqual(declared);
+  });
+
+  it('lists only top-level routes, which is all the publisher handles', () => {
+    for (const route of published) {
+      expect(route, `${route} is nested, so it would need a directory key`).not.toContain('/');
+    }
+  });
+});
+
 describe('shared constants match', () => {
   it('requires the same minimum password length', () => {
     const server = /MIN_PASSWORD_LENGTH\s*=\s*(\d+)/.exec(backend('services/password.ts'));

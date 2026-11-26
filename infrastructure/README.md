@@ -236,11 +236,16 @@ curl -fsS $API_URL/health
 
 ## Step 5: Publish the frontend
 
-`VITE_API_URL` is compiled into the bundle, so it must be set at build time, not runtime.
+**Build for same-origin calls.** `VITE_API_URL` is compiled into the bundle, and it must be `/`, not the App Runner address.
+
+The session and CSRF cookies are `SameSite=Lax`, and a browser will not send them on a cross-site request. If the bundle calls `*.awsapprunner.com` while the page is on `*.cloudfront.net`, the cookies are withheld and sign-up fails with a 403 before it reaches any account logic. The CloudFront stack therefore proxies `/api/*` to App Runner (set `ApiOrigin` in step 5 of the stack), and the page calls its own origin.
 
 ```bash
 cd frontend
-VITE_API_URL=$API_URL npm run build
+VITE_API_URL=/ npm run build
+
+# Fail loudly if the bundle names a backend directly.
+! grep -rq "awsapprunner.com\|localhost:3000" dist/assets
 
 aws s3 sync dist s3://$BUCKET_NAME --exclude index.html \
   --cache-control "public,max-age=31536000,immutable"
@@ -248,10 +253,20 @@ aws s3 sync dist s3://$BUCKET_NAME --exclude index.html \
 aws s3 cp dist/index.html s3://$BUCKET_NAME/index.html \
   --cache-control "no-cache,no-store,must-revalidate"
 
-aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/" "/index.html"
+# A copy of the app shell at each client-side route, so a refresh or a shared
+# link works. The list is infrastructure/spa-routes.txt.
+while read -r route; do
+  [ -n "$route" ] && aws s3 cp dist/index.html "s3://$BUCKET_NAME/$route" \
+    --cache-control "no-cache,no-store,must-revalidate" \
+    --content-type "text/html; charset=utf-8"
+done < ../infrastructure/spa-routes.txt
+
+aws cloudfront create-invalidation --distribution-id $DISTRIBUTION_ID --paths "/*"
 ```
 
 Hashed assets upload first and are cached for a year. `index.html` uploads last and is never cached, so a deployment takes effect at once rather than serving an old bundle.
+
+On Windows, `infrastructure/redeploy-frontend.ps1` does all of this and checks the result.
 
 ## Step 6: Deployment identity for CI
 
@@ -281,7 +296,8 @@ Then add these **repository variables** in GitHub under Settings → Secrets and
 | `APP_RUNNER_SERVICE_ARN` | `ServiceArn` output from stack 04 |
 | `FRONTEND_BUCKET` | your bucket name |
 | `CLOUDFRONT_DISTRIBUTION_ID` | `DistributionId` output from stack 05 |
-| `VITE_API_URL` | `ServiceUrl` output from stack 04 |
+
+There is no `VITE_API_URL` variable. The frontend workflow builds with `/` directly, because taking the App Runner address from a variable would ship a bundle that calls it cross-site and silently break sign-in.
 
 Both deploy workflows are `workflow_dispatch` only and require typing `deploy` to confirm. Production deployment is a deliberate act, not a side effect of merging.
 

@@ -254,8 +254,10 @@ Invoke-Checked 'upload index.html' {
         --content-type 'text/html; charset=utf-8' --no-progress
 }
 Invoke-Checked 'remove orphaned files' {
-    aws s3 sync (Join-Path $frontendDir 'dist') "s3://$bucket" --delete `
-        --exclude 'login' --exclude 'privacy' --exclude 'dashboard' --no-progress
+    # Each published route shell is excluded, or this would delete them on
+    # every deployment because they are not in dist/.
+    $excludes = $spaRoutes | ForEach-Object { '--exclude'; $_ }
+    aws s3 sync (Join-Path $frontendDir 'dist') "s3://$bucket" --delete @excludes --no-progress
 }
 
 # Client-side routes, published as copies of the app shell.
@@ -270,9 +272,10 @@ Invoke-Checked 'remove orphaned files' {
 # After the --delete sync above, and excluded from it, or it would remove
 # these on every deployment because they are not in dist/.
 #
-# Keep in step with the routes in frontend/src/App.tsx. A route missing here
-# still works through in-app navigation; only a direct load or refresh fails.
-foreach ($spaRoute in @('login', 'privacy', 'dashboard')) {
+# The list is infrastructure/spa-routes.txt, and a backend test fails if it
+# drifts from frontend/src/App.tsx. A route missing from it still works through
+# in-app navigation; only a direct load or refresh fails.
+foreach ($spaRoute in $spaRoutes) {
     Invoke-Checked "publish the shell for /$spaRoute" {
         aws s3 cp (Join-Path $frontendDir 'dist/index.html') "s3://$bucket/$spaRoute" `
             --cache-control 'no-cache,no-store,must-revalidate' `

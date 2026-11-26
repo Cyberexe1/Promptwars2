@@ -1,0 +1,3 @@
+login
+privacy
+dashboard

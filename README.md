@@ -141,7 +141,9 @@ Verified against the running deployment:
 | Anonymous plan request | 401, as intended |
 | CORS from CloudFront | Allowed, echoing that exact origin |
 | CORS from another origin | 403 |
-| Client-side route `/dashboard` | 200 via the single-page-app fallback |
+| Client-side routes `/login`, `/privacy`, `/dashboard` | 200, each served from a published copy of the app shell |
+| API through the site origin | `/api/*` is proxied by CloudFront, so the page and the API are one site and the session cookie is sent |
+| Request refused by the API | Keeps its real status through CloudFront (403 without a CSRF token, 404 for an unknown endpoint) |
 | Security headers | HSTS, CSP, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff` |
 
 > Running this costs money. App Runner bills continuously at `MinSize: 1`
@@ -249,7 +251,7 @@ Client-side routing means a deep link such as `/dashboard` is not a file in S3. 
 | Backend | Node.js 22, TypeScript, Express 5 | API, validation, recommendation orchestration |
 | Validation | Zod | Request and model-output schema validation |
 | GenAI | Amazon Bedrock (Converse API) | Rewords reviewed recommendations for the household |
-| Database | Amazon DynamoDB | User preferences, saved plans, and cached summaries (Phase 3) |
+| Database | Amazon DynamoDB | User accounts and the air-quality cache. Saved plans stay in the browser by design |
 | Air-quality data | [Open-Meteo](https://open-meteo.com/) Air Quality and Geocoding APIs | Current pollutant readings and city search, no API key required |
 | Frontend hosting | Amazon S3 | Stores the production React build |
 | Content delivery | Amazon CloudFront | Delivers the frontend over HTTPS and caches static assets |
@@ -347,7 +349,7 @@ stay in browser local storage and never reach a server. The
 `USER#<userId>`/`PLAN#<timestamp>` and `COMMUNITY#<id>` key designs above are
 therefore unused: DynamoDB holds accounts and the air-quality cache only.
 
-All write endpoints validate input, limit payload size, and enforce rate limits. The saved-plan endpoints will additionally require authentication. See [`backend/README.md`](backend/README.md) for request and response shapes.
+All write endpoints validate input, limit payload size, and enforce rate limits. The plan endpoint requires a signed-in session. See [`backend/README.md`](backend/README.md) for request and response shapes.
 
 ## Security Measures
 
@@ -453,9 +455,9 @@ Verified against live data during development: Delhi at US AQI 183 (PM2.5 69.6 �
 Two things deliberately deferred rather than half-built:
 
 - **DynamoDB** is designed but unused, because nothing in the Phase 1 journey needs persistence. It arrives with saved plans in Phase 3.
-- **Authentication** is absent for the same reason. The app is useful anonymously, so Cognito is only justified once private saved data exists.
+- **Authentication** was absent in this phase for the same reason. Phase 3 added accounts, built directly rather than with Cognito; see the Phase 3 list below.
 
-### Phase 2: AWS Infrastructure, Deployment, and Security — code complete
+### Phase 2: AWS Infrastructure, Deployment, and Security — complete and deployed
 
 **Goal:** Deploy a secure, observable production version on AWS.
 
@@ -507,7 +509,7 @@ Everything below is written and validated locally. Applying it to a live AWS acc
 
 One finding worth your attention: AWS moved **App Runner into maintenance mode on 31 March 2026** and closed it to new customers on 30 April 2026 ([AWS notice](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html)). You asked for App Runner and the template targets it, which works for accounts that already used the service. If yours did not, AWS directs new accounts to Amazon ECS Express Mode; only the compute service would change, and the container, registry, database, and frontend stacks stay exactly as they are.
 
-### Phase 3: Product Polish, Validation, and Submission — code complete
+### Phase 3: Product Polish, Validation, and Submission — complete, with three items that need a person
 
 **Goal:** Improve practical usefulness, verify evaluation criteria, and prepare the final submission.
 
@@ -543,10 +545,10 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 - [x] Remove generated files and other unnecessary content so the repository remains below 10 MB. Tracked content is well under a megabyte
 - [ ] Add screenshots and a concise application walkthrough. **Needs you.** Run the app and capture the landing page, a reading, and a plan
 - [ ] Record the demonstration video and publish it unlisted or via an accessible Drive link. **Needs you**
-- [ ] Perform a final production smoke test in a new browser session. **Requires a live deployment**
+- [ ] Perform a final production smoke test in a real browser session. **Needs you.** The scripted checks in `infrastructure/verify-account-flow.ps1` pass against the live site, but `curl` ignores `SameSite`, so only a browser can confirm that sign-in works
 - [ ] Submit the public repository link once the items above are done
 
-**Phase 3 deliverable: code complete.** The application is accessible, tested, and documented. Four items remain and none are code: screenshots, the video, the live deployment, and a manual screen-reader pass. [`docs/limitations.md`](docs/limitations.md) records every one of them rather than leaving a reviewer to discover them.
+**Phase 3 deliverable: met.** The application is deployed, accessible, tested, and documented. Four items remain and none are code: screenshots, the video, a browser sign-in check, and a manual screen-reader pass. [`docs/limitations.md`](docs/limitations.md) records every one of them rather than leaving a reviewer to discover them.
 
 ## Repository Structure
 
@@ -554,15 +556,15 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 .
 ├── backend/                  # Node.js API
 │   ├── src/
-│   │   ├── domain/           # AQI bands, risk rules, recommendation catalogue
+│   │   ├── domain/           # AQI bands, risk rules, outlook timing
+│   │   │   └── catalogue/    # The reviewed advice, one file per category
 │   │   ├── services/         # Upstream calls, Bedrock, plan assembly
 │   │   ├── routes/           # HTTP endpoints
 │   │   ├── middleware/       # Errors, CSRF, session, per-account login throttle
 │   │   ├── utils/            # Errors and logging
 │   │   ├── app.ts            # Express app, exported for tests
 │   │   └── server.ts         # Listener and shutdown
-│   ├── tests/                # 283 Vitest tests
-│   └── .env.example
+│   ├── tests/                # 283 Vitest tests, including the frontend/backend contract guard
 │   ├── Dockerfile            # Multi-stage, non-root runtime
 │   └── .env.example
 ├── frontend/                 # React application
@@ -575,7 +577,7 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 │   │   ├── community.ts      # Shareable checklist, household data stripped
 │   │   ├── api.ts            # API client
 │   │   └── types.ts          # Contract types
-│   └── src/**/*.test.{ts,tsx}  # 246 Vitest tests
+│   └── src/**/*.test.{ts,tsx}  # 254 Vitest tests
 ├── docs/
 │   ├── architecture.md       # System shape, request flow, design decisions
 │   └── limitations.md        # What is unverified and why
@@ -601,7 +603,7 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 - [x] The repository contains only one branch. `git ls-remote --heads` returns `main` alone
 - [x] The complete repository is smaller than 10 MB. Tracked content is under 1 MB; `node_modules` and `dist` are ignored
 - [x] The README explains the vertical, approach, logic, operation, and assumptions.
-- [x] Setup, test, and deployment instructions are verified. Every local command was run; deployment commands are scripted but unapplied
+- [x] Setup, test, and deployment instructions are verified. Every local command was run, and the deployment scripts have been applied to a live stack
 - [x] No credentials, tokens, personal information, or `.env` files are committed. Only `.env.example`; CI also runs Gitleaks over full history
 - [x] The application includes tests and accessibility checks. 537 tests, including axe on every route and 42 computed contrast assertions
 - [ ] The video is unlisted on YouTube or shared through a publicly accessible Drive link.

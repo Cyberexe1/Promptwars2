@@ -29,6 +29,10 @@ $env:AWS_PAGER = ''
 $repoRoot = Split-Path $PSScriptRoot -Parent
 $prefix = 'smogwise'
 
+# Shared with deploy.ps1 and the deploy-frontend workflow.
+$spaRoutes = @(Get-Content (Join-Path $PSScriptRoot 'spa-routes.txt') |
+    Where-Object { $_.Trim() -ne '' } | ForEach-Object { $_.Trim() })
+
 function Step($t) { Write-Host ''; Write-Host "=== $t ===" -ForegroundColor Cyan }
 function Fail($m) { Write-Host "FAILED: $m" -ForegroundColor Red; exit 1 }
 
@@ -106,7 +110,7 @@ Step 'Publish the app shell at each client-side route'
 # Keep this list in step with the routes in frontend/src/App.tsx. A route that
 # is missing here still works when reached by in-app navigation and returns the
 # S3 error on a direct load or refresh.
-$routes = @('login', 'privacy', 'dashboard')
+$routes = $spaRoutes
 foreach ($route in $routes) {
     aws s3 cp (Join-Path $dist 'index.html') "s3://$bucket/$route" `
         --content-type 'text/html' --cache-control 'no-cache' --region $region
@@ -142,7 +146,7 @@ else {
     Write-Host "  FAIL  expected 403, got $noCsrf" -ForegroundColor Red
 }
 
-foreach ($route in @('login', 'privacy', 'dashboard')) {
+foreach ($route in $spaRoutes) {
     $r = (curl.exe -s -o NUL -w '%{http_code} %{content_type}' "$siteUrl/$route" 2>&1 | Out-String).Trim()
     Write-Host "  GET /$route -> $r"
 }
