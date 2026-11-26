@@ -7,6 +7,7 @@ import {
   hashPassword,
   MAX_PASSWORD_LENGTH,
   MIN_PASSWORD_LENGTH,
+  TIMING_REFERENCE_HASH,
   verifyPassword,
 } from '../services/password.js';
 import {
@@ -107,109 +108,109 @@ export function createAuthRouter(config: AppConfig): Router {
   });
 
   authRouter.post(
-  '/signup',
-  authLimiter,
-  asyncHandler(async (req, res) => {
-    const parsed = credentialsSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw badRequest(formatIssues(parsed.error));
-    }
+    '/signup',
+    authLimiter,
+    asyncHandler(async (req, res) => {
+      const parsed = credentialsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw badRequest(formatIssues(parsed.error));
+      }
 
-    const { email, password } = parsed.data;
-    const store = getUserStore();
+      const { email, password } = parsed.data;
+      const store = getUserStore();
 
-    // Signup spends the same per-account budget as a failed login, so probing
-    // addresses for existing accounts is rate-limited rather than free. Also
-    // stops repeated expensive hashing against one address.
-    if (throttle.isBlocked(email)) {
-      logger.info('signup_throttled');
-      res.setHeader('Retry-After', String(throttle.retryAfterSeconds(email)));
-      throw new AppError(
-        429,
-        'TOO_MANY_ATTEMPTS',
-        'Too many attempts for this account. Please wait a few minutes and try again.',
+      // Signup spends the same per-account budget as a failed login, so probing
+      // addresses for existing accounts is rate-limited rather than free. Also
+      // stops repeated expensive hashing against one address.
+      if (throttle.isBlocked(email)) {
+        logger.info('signup_throttled');
+        res.setHeader('Retry-After', String(throttle.retryAfterSeconds(email)));
+        throw new AppError(
+          429,
+          'TOO_MANY_ATTEMPTS',
+          'Too many attempts for this account. Please wait a few minutes and try again.',
+        );
+      }
+
+      // Hash before the uniqueness check so a taken address and a free one cost
+      // the same amount of time to answer.
+      const passwordHash = await hashPassword(password);
+      const user = await store.create(email, passwordHash);
+
+      if (!user) {
+        throttle.recordFailure(email);
+        logger.info('signup_rejected', { reason: 'email_in_use' });
+        throw new AppError(
+          409,
+          'EMAIL_IN_USE',
+          'That email cannot be used to register. Try signing in instead.',
+        );
+      }
+
+      res.cookie(
+        SESSION_COOKIE,
+        createSessionToken(user.id),
+        sessionCookieOptions(SESSION_TTL_SECONDS * 1000),
       );
-    }
 
-    // Hash before the uniqueness check so a taken address and a free one cost
-    // the same amount of time to answer.
-    const passwordHash = await hashPassword(password);
-    const user = await store.create(email, passwordHash);
-
-    if (!user) {
-      throttle.recordFailure(email);
-      logger.info('signup_rejected', { reason: 'email_in_use' });
-      throw new AppError(
-        409,
-        'EMAIL_IN_USE',
-        'That email cannot be used to register. Try signing in instead.',
-      );
-    }
-
-    res.cookie(
-      SESSION_COOKIE,
-      createSessionToken(user.id),
-      sessionCookieOptions(SESSION_TTL_SECONDS * 1000),
-    );
-
-    logger.info('signup_succeeded');
-    res.status(201).json({ user: { id: user.id, email: user.email } });
-  }),
-);
+      logger.info('signup_succeeded');
+      res.status(201).json({ user: { id: user.id, email: user.email } });
+    }),
+  );
 
   authRouter.post(
-  '/login',
-  authLimiter,
-  asyncHandler(async (req, res) => {
-    const parsed = credentialsSchema.safeParse(req.body);
-    if (!parsed.success) {
-      // Same message as a wrong password: a validation hint here would reveal
-      // which addresses are well-formed enough to exist.
-      throw new AppError(401, 'INVALID_CREDENTIALS', INVALID_CREDENTIALS);
-    }
+    '/login',
+    authLimiter,
+    asyncHandler(async (req, res) => {
+      const parsed = credentialsSchema.safeParse(req.body);
+      if (!parsed.success) {
+        // Same message as a wrong password: a validation hint here would reveal
+        // which addresses are well-formed enough to exist.
+        throw new AppError(401, 'INVALID_CREDENTIALS', INVALID_CREDENTIALS);
+      }
 
-    const { email, password } = parsed.data;
+      const { email, password } = parsed.data;
 
-    // Per-account throttle, checked before any work is done. Applies whether
-    // or not the account exists, so the response cannot be used to tell.
-    if (throttle.isBlocked(email)) {
-      logger.info('login_throttled');
-      res.setHeader('Retry-After', String(throttle.retryAfterSeconds(email)));
-      throw new AppError(
-        429,
-        'TOO_MANY_ATTEMPTS',
-        'Too many sign-in attempts for this account. Please wait a few minutes and try again.',
+      // Per-account throttle, checked before any work is done. Applies whether
+      // or not the account exists, so the response cannot be used to tell.
+      if (throttle.isBlocked(email)) {
+        logger.info('login_throttled');
+        res.setHeader('Retry-After', String(throttle.retryAfterSeconds(email)));
+        throw new AppError(
+          429,
+          'TOO_MANY_ATTEMPTS',
+          'Too many sign-in attempts for this account. Please wait a few minutes and try again.',
+        );
+      }
+
+      const user = await getUserStore().findByEmail(normaliseEmail(email));
+
+      // Verify against a dummy hash when no user exists, so a missing account
+      // and a wrong password take the same time to reject.
+      const reference =
+        user?.passwordHash ??
+        TIMING_REFERENCE_HASH;
+      const ok = await verifyPassword(password, reference);
+
+      if (!user || !ok) {
+        throttle.recordFailure(email);
+        logger.info('login_failed');
+        throw new AppError(401, 'INVALID_CREDENTIALS', INVALID_CREDENTIALS);
+      }
+
+      // A correct password clears the record, so normal use is never penalised.
+      throttle.recordSuccess(email);
+
+      res.cookie(
+        SESSION_COOKIE,
+        createSessionToken(user.id),
+        sessionCookieOptions(SESSION_TTL_SECONDS * 1000),
       );
-    }
 
-    const user = await getUserStore().findByEmail(normaliseEmail(email));
-
-    // Verify against a dummy hash when no user exists, so a missing account
-    // and a wrong password take the same time to reject.
-    const reference =
-      user?.passwordHash ??
-      'scrypt$32768$8$1$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==';
-    const ok = await verifyPassword(password, reference);
-
-    if (!user || !ok) {
-      throttle.recordFailure(email);
-      logger.info('login_failed');
-      throw new AppError(401, 'INVALID_CREDENTIALS', INVALID_CREDENTIALS);
-    }
-
-    // A correct password clears the record, so normal use is never penalised.
-    throttle.recordSuccess(email);
-
-    res.cookie(
-      SESSION_COOKIE,
-      createSessionToken(user.id),
-      sessionCookieOptions(SESSION_TTL_SECONDS * 1000),
-    );
-
-    logger.info('login_succeeded');
-    res.json({ user: { id: user.id, email: user.email } });
-  }),
-);
+      logger.info('login_succeeded');
+      res.json({ user: { id: user.id, email: user.email } });
+    }),
+  );
 
   authRouter.post('/logout', (_req, res) => {
     // Overwrite with an immediately expiring cookie rather than relying on the

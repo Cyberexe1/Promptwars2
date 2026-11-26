@@ -1,10 +1,25 @@
 <#
-    Deploys the same-origin fix: adds the CloudFront /api behaviour and
-    republishes the bundle built for same-origin calls.
+.SYNOPSIS
+    Redeploys only the frontend: the CloudFront stack and the published bundle.
 
-    Why this exists as its own script: deploy.ps1 runs the whole pipeline
-    including ECR, the data stack and App Runner, none of which need to change
-    here. This touches only the frontend stack and the published bundle.
+.DESCRIPTION
+    Use this when the backend has not changed. deploy.ps1 runs the whole
+    pipeline, including ECR, the data stack, and App Runner, and needs a running
+    Docker daemon. None of that is needed to ship a frontend change, so this
+    skips it.
+
+    It does four things, in order:
+      1. updates the CloudFront stack, pointing /api at the App Runner origin
+      2. builds the bundle for same-origin calls (VITE_API_URL=/)
+      3. uploads assets, then index.html, then a copy of the shell per route
+      4. invalidates the cache and checks the result
+
+    Same-origin matters because the session and CSRF cookies are SameSite=Lax.
+    A bundle that calls App Runner directly makes the page and the API
+    different sites, the browser withholds the cookies, and sign-up fails.
+
+    Keep the route list below in step with frontend/src/App.tsx and with the
+    same list in deploy.ps1.
 #>
 $ErrorActionPreference = 'Continue'
 $env:AWS_PAGER = ''

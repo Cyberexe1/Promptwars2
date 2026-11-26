@@ -70,6 +70,26 @@ export function hashSlotsInUse(): number {
 export const MIN_PASSWORD_LENGTH = 12;
 
 /**
+ * A well-formed hash that no password will ever match.
+ *
+ * Login verifies against this when the account does not exist, so a missing
+ * account and a wrong password take the same time to reject. It used to be a
+ * string literal in the route handler with the cost parameters written out by
+ * hand. That was correct on the day it was written and would have stopped being
+ * correct the moment `COST` was raised, silently making the unknown-account
+ * path cheaper than a real one and reopening the timing leak it exists to
+ * close. Built from `COST` so the two cannot drift apart.
+ */
+export const TIMING_REFERENCE_HASH = [
+  'scrypt',
+  COST.N,
+  COST.r,
+  COST.p,
+  Buffer.alloc(SALT_LENGTH).toString('base64'),
+  Buffer.alloc(KEY_LENGTH).toString('base64'),
+].join('$');
+
+/**
  * Upper bound on password length.
  *
  * Without one, a very long password becomes a cheap way to make the server do

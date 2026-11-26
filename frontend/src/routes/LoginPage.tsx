@@ -89,77 +89,77 @@ export function LoginPage() {
         </p>
 
         <form className="card auth-form" onSubmit={handleSubmit} noValidate>
-        <div className="field">
-          <label htmlFor={emailId}>Email address</label>
-          <input
-            id={emailId}
-            type="email"
-            value={email}
-            autoComplete="email"
-            autoCapitalize="none"
-            spellCheck={false}
-            required
-            onChange={(event) => setEmail(event.target.value)}
-          />
-        </div>
+          <div className="field">
+            <label htmlFor={emailId}>Email address</label>
+            <input
+              id={emailId}
+              type="email"
+              value={email}
+              autoComplete="email"
+              autoCapitalize="none"
+              spellCheck={false}
+              required
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </div>
 
-        <div className="field">
-          <label htmlFor={passwordId}>Password</label>
-          <input
-            id={passwordId}
-            type="password"
-            value={password}
-            // Tells a password manager whether to offer a saved password or
-            // generate a new one.
-            autoComplete={creating ? 'new-password' : 'current-password'}
-            required
-            {...(creating ? { minLength: MIN_PASSWORD_LENGTH } : {})}
-            onChange={(event) => setPassword(event.target.value)}
-          />
-          {creating && (
-            <span className="hint">
-              At least {MIN_PASSWORD_LENGTH} characters. A short phrase of a few
-              words is easier to remember and harder to guess than a short
-              password with symbols.
-            </span>
+          <div className="field">
+            <label htmlFor={passwordId}>Password</label>
+            <input
+              id={passwordId}
+              type="password"
+              value={password}
+              // Tells a password manager whether to offer a saved password or
+              // generate a new one.
+              autoComplete={creating ? 'new-password' : 'current-password'}
+              required
+              {...(creating ? { minLength: MIN_PASSWORD_LENGTH } : {})}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+            {creating && (
+              <span className="hint">
+                At least {MIN_PASSWORD_LENGTH} characters. A short phrase of a few
+                words is easier to remember and harder to guess than a short
+                password with symbols.
+              </span>
+            )}
+          </div>
+
+          {error && (
+            <p className="alert alert-error" id={errorId} role="alert">
+              {error}
+            </p>
           )}
-        </div>
 
-        {error && (
-          <p className="alert alert-error" id={errorId} role="alert">
-            {error}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          className="button button-primary"
-          disabled={busy}
-          {...(error ? { 'aria-describedby': errorId } : {})}
-        >
-          {busy
-            ? creating
-              ? 'Creating your account…'
-              : 'Signing you in…'
-            : creating
-              ? 'Create account'
-              : 'Sign in'}
-        </button>
-
-        <p className="auth-switch">
-          {creating ? 'Already have an account?' : 'No account yet?'}{' '}
           <button
-            type="button"
-            className="link-button"
-            onClick={() => {
-              setMode(creating ? 'login' : 'signup');
-              setError(null);
-            }}
+            type="submit"
+            className="button button-primary"
+            disabled={busy}
+            {...(error ? { 'aria-describedby': errorId } : {})}
           >
-            {creating ? 'Sign in instead' : 'Create one'}
+            {busy
+              ? creating
+                ? 'Creating your account…'
+                : 'Signing you in…'
+              : creating
+                ? 'Create account'
+                : 'Sign in'}
           </button>
-        </p>
-      </form>
+
+          <p className="auth-switch">
+            {creating ? 'Already have an account?' : 'No account yet?'}{' '}
+            <button
+              type="button"
+              className="link-button"
+              onClick={() => {
+                setMode(creating ? 'login' : 'signup');
+                setError(null);
+              }}
+            >
+              {creating ? 'Sign in instead' : 'Create one'}
+            </button>
+          </p>
+        </form>
 
         <p className="hint auth-note">
           We store only your email address and a hashed password. Your

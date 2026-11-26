@@ -6,7 +6,7 @@ Node.js and TypeScript service that fetches live air quality, assesses risk with
 
 The language model never decides what advice to give.
 
-1. A reviewed catalogue in [`src/domain/catalogue.ts`](src/domain/catalogue.ts) holds every suggestion the service can return.
+1. A reviewed catalogue in [`src/domain/catalogue.ts`](src/domain/catalogue.ts) (entries in [`catalogue/`](src/domain/catalogue/), one file per category) holds every suggestion the service can return.
 2. The rules engine in [`src/domain/recommend.ts`](src/domain/recommend.ts) picks which entries apply to this household at this air-quality band.
 3. Amazon Bedrock may only reword the entries that were already chosen.
 4. [`src/services/planner.ts`](src/services/planner.ts) discards any model output with an unrecognised id and replaces wording that contradicts a safety constraint.
@@ -132,7 +132,7 @@ When the provider returns neither `us_aqi` nor `pm2_5`, the service does not gue
 
 ## Tests
 
-256 tests, no network access. Both upstream services are mocked and the Bedrock client is never constructed.
+283 tests, no network access. Both upstream services are mocked and the Bedrock client is never constructed.
 
 | File | Covers |
 |---|---|

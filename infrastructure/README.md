@@ -10,6 +10,9 @@ Infrastructure as CloudFormation. Five templates, deployed in numeric order, bec
 05-frontend.yaml      Private S3 bucket, CloudFront, OAC, security headers
 ```
 
+What each script in this directory is for, and which need Docker, is in
+[`SCRIPTS.md`](SCRIPTS.md).
+
 ---
 
 ## Read this before you start: App Runner eligibility

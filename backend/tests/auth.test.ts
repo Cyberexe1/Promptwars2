@@ -3,7 +3,11 @@ import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { MemoryUserStore, setUserStoreForTesting } from '../src/services/users.js';
-import { hashPassword, verifyPassword } from '../src/services/password.js';
+import {
+  hashPassword,
+  TIMING_REFERENCE_HASH,
+  verifyPassword,
+} from '../src/services/password.js';
 import {
   createSessionToken,
   readCookie,
@@ -48,6 +52,18 @@ const login = (email = EMAIL, password = PASSWORD) =>
   postJson(app, '/api/auth/login', { email, password });
 
 describe('password hashing', () => {
+  it('builds the timing reference from the live cost parameters', async () => {
+    // Login verifies against this when an account does not exist, so that a
+    // missing account and a wrong password take equally long. If the cost is
+    // raised and this does not follow, the unknown-account path becomes
+    // cheaper than a real one and the timing leak it closes reopens.
+    const real = (await hashPassword(PASSWORD)).split('$').slice(0, 4);
+    const reference = TIMING_REFERENCE_HASH.split('$').slice(0, 4);
+
+    expect(reference).toEqual(real);
+    expect(await verifyPassword(PASSWORD, TIMING_REFERENCE_HASH)).toBe(false);
+  });
+
   it('does not store the password itself', async () => {
     const hash = await hashPassword(PASSWORD);
     expect(hash).not.toContain(PASSWORD);

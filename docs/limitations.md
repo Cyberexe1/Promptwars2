@@ -35,7 +35,16 @@ and the whole household matrix asserts it, but the balance of the catalogue
 still leans towards protection over reduction. Writing more emission entries is
 content work, not engineering, and each one needs to be defensible.
 
-**Request and response shapes are duplicated by hand.** The frontend declares its own types matching the backend's Zod schemas. Nothing fails the build if the two drift apart; a shared package or generated types would close that gap.
+**Request and response shapes are still declared twice, but now guarded.** The
+frontend and backend each declare the 20 API types, and a handful of constants
+(minimum password length, CSRF cookie and header names, AQI band edges, the
+outdoor-minutes cap, the freshness window) are written out on both sides. A
+shared package was ruled out because the backend container copies only its own
+directory. `backend/tests/contract.test.ts` reads the frontend source and fails,
+naming the type or constant, if the two diverge; it was checked by introducing
+deliberate drift. The guard compares text, so it catches a renamed field or a
+moved band edge but not a change that is semantically different yet
+textually identical. Generated types would be stronger.
 
 **Signup reveals whether an address is registered.** A taken address answers
 409 and a free one 201. This cannot be closed while signup also signs the user
@@ -108,7 +117,7 @@ hour can be wrong in the ordinary way forecasts are wrong.
 
 ## Testing boundaries
 
-510 tests pass and none touch the network: upstream services are mocked in the backend, `fetch` is stubbed in the frontend, and the Bedrock client is never constructed.
+537 tests pass and none touch the network: upstream services are mocked in the backend, `fetch` is stubbed in the frontend, and the Bedrock client is never constructed.
 
 That is also the limit. These tests prove the code behaves as written against fixtures. They do not prove that Open-Meteo's response shape is still what the schema expects, that Bedrock returns usable prose, or that CloudFront serves the headers the template specifies. Scripts in [`infrastructure/`](../infrastructure/) check those against the deployed stack instead: `audit-live.ps1` asserts health, live readings, signup, CORS rejection, SPA fallback, and security headers; `verify-bedrock.ps1` confirms a plan came back from the model rather than the rules fallback; `verify-throttle.ps1` drives the login throttle to 429. They have been run against the live deployment and pass.
 
