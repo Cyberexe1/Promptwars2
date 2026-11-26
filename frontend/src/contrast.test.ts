@@ -126,6 +126,18 @@ describe('every risk band label is readable', () => {
   });
 });
 
+describe('the emission tag is readable and its border is visible', () => {
+  it('meets AA for text', () => {
+    expect(contrastRatio(tokens['risk-good']!, tokens['surface']!)).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it('meets the 3:1 non-text minimum for its border', () => {
+    // WCAG 2.2 1.4.11. The tag is distinguished by colour and weight, so the
+    // outline has to be perceivable on its own.
+    expect(contrastRatio(tokens['risk-good']!, tokens['surface']!)).toBeGreaterThanOrEqual(3);
+  });
+});
+
 describe('feedback colours meet AA on their own backgrounds', () => {
   it.each([
     ['error', 'error-ink', 'error-bg'],

@@ -208,7 +208,15 @@ $frontendDir = Join-Path $repoRoot 'frontend'
 if (-not $DryRun) {
     Push-Location $frontendDir
     try {
-        $env:VITE_API_URL = $apiUrl
+        # Empty on purpose, so every call is same-origin and CloudFront routes
+        # /api/* to App Runner through the behaviour added in step 4.
+        #
+        # The bundle used to be built with the App Runner URL, which made the
+        # page and the API different sites. A browser will not attach the
+        # SameSite=Lax session cookie across sites, so sign-in appeared to
+        # succeed and the dashboard then reported no session. curl ignores
+        # SameSite, which is why the live smoke tests never caught it.
+        $env:VITE_API_URL = ''
         npm ci
         if ($LASTEXITCODE -ne 0) { Fail 'npm ci failed' }
         npm run build
@@ -217,6 +225,12 @@ if (-not $DryRun) {
         # Guard against shipping a bundle that still calls localhost.
         if (Select-String -Path 'dist/assets/*.js' -Pattern 'localhost:3000' -Quiet) {
             Fail 'The bundle still points at localhost. VITE_API_URL did not apply.'
+        }
+
+        # And against one that calls App Runner directly, which is the
+        # cross-site arrangement the /api behaviour exists to avoid.
+        if (Select-String -Path 'dist/assets/*.js' -Pattern 'awsapprunner\.com' -Quiet) {
+            Fail 'The bundle calls App Runner directly. Session cookies will not be sent.'
         }
     }
     finally { Pop-Location }

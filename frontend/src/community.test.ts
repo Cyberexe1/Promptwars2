@@ -19,6 +19,8 @@ function recommendation(overrides: Partial<Recommendation> = {}): Recommendation
     cost: 'free',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: true,
+    communityBenefit: true,
     ...overrides,
   };
 }
@@ -28,18 +30,52 @@ describe('hasCommunityBenefit', () => {
     expect(hasCommunityBenefit(recommendation())).toBe(true);
   });
 
+  it('reads the flag, not the prose', () => {
+    // The whole point of the change. `communityImpact` is one of the four
+    // fields the model may reword, so a reword from "None directly." to
+    // "No direct effect on the area." used to promote a personal-only item
+    // into a checklist meant for sharing.
+    expect(
+      hasCommunityBenefit(
+        recommendation({
+          communityBenefit: false,
+          communityImpact: 'No direct effect on the area.',
+        }),
+      ),
+    ).toBe(false);
+
+    expect(
+      hasCommunityBenefit(
+        recommendation({
+          communityBenefit: true,
+          communityImpact: 'None directly.',
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it('drops an item the catalogue marks as personal-only', () => {
+    expect(hasCommunityBenefit(recommendation({ communityBenefit: false }))).toBe(
+      false,
+    );
+  });
+
   it.each([
     'None directly.',
     'none directly',
     'None directly, though it helps you.',
-  ])('drops an item whose community effect is %s', (communityImpact) => {
-    expect(hasCommunityBenefit(recommendation({ communityImpact }))).toBe(false);
-  });
-
-  it('is not fooled by leading whitespace', () => {
+    '  None directly.',
+    'No direct effect on the area.',
+    'Nothing shared, really.',
+  ])('ignores the wording %s entirely', (communityImpact) => {
+    // Each of these used to decide the outcome. None of them does now, which
+    // is why a reworded field can no longer change what gets shared.
     expect(
-      hasCommunityBenefit(recommendation({ communityImpact: '  None directly.' })),
+      hasCommunityBenefit(recommendation({ communityImpact, communityBenefit: false })),
     ).toBe(false);
+    expect(
+      hasCommunityBenefit(recommendation({ communityImpact, communityBenefit: true })),
+    ).toBe(true);
   });
 });
 
@@ -114,7 +150,7 @@ describe('buildCommunityChecklist', () => {
       ...PLAN,
       recommendations: PLAN.recommendations.map((item) => ({
         ...item,
-        communityImpact: 'None directly.',
+        communityBenefit: false,
       })),
     };
 
@@ -153,7 +189,7 @@ describe('formatChecklistAsText', () => {
       ...PLAN,
       recommendations: PLAN.recommendations.map((item) => ({
         ...item,
-        communityImpact: 'None directly.',
+        communityBenefit: false,
       })),
     };
 

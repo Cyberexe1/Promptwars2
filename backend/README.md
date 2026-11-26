@@ -110,7 +110,11 @@ When the provider returns neither `us_aqi` nor `pm2_5`, the service does not gue
 - Input validated with Zod at every entry point, including coordinate ranges, enum values, text length, and control characters.
 - 16 kB request body ceiling; oversized bodies return 403 or 413, never 500.
 - Rate limiting on `/api` (60 requests per minute by default), with a much tighter limit on the credential routes.
-- Per-account login throttling on top of the per-address limit: 8 failures for one email address within 15 minutes and further attempts get 429 with `Retry-After`, no matter which addresses they come from. A correct password clears the count. See [`src/middleware/loginThrottle.ts`](src/middleware/loginThrottle.ts) for why unregistered addresses are counted too.
+- Per-account login throttling on top of the per-address limit: 8 failures for one email address within 15 minutes and further attempts get 429 with `Retry-After`, no matter which addresses they come from. A correct password clears the count. See [`src/middleware/loginThrottle.ts`](src/middleware/loginThrottle.ts) for why unregistered addresses are counted too. Signup spends the same budget, so probing addresses for existing accounts is rate-limited rather than free.
+- At most four password hashes run at once. Each needs about 32 MB, and the instance has 0.5 GB with a concurrency limit of 50, so an unauthenticated burst of sign-in attempts could otherwise exhaust memory. Excess requests queue.
+- The CSRF token is HMAC-signed with the session secret. Without a signature the check was only that two caller-controllable values matched each other, which anything able to set a cookie on this host could satisfy.
+- Cached air-quality items are parsed through a schema on read, not cast. The cache is shared between instances, so an unvalidated read let one bad writer poison the readings served to everyone, and that text reaches the model prompt. Writes carry a `ConditionExpression` so a stale write cannot replace a fresher entry.
+- The location name is stripped of angle brackets before it is placed in the Bedrock prompt. The delimiter tags around it are only a boundary if the caller cannot write one, and 120 characters is enough to close the tag and open a forged `<safety_constraints>` block.
 - CORS restricted to an explicit allowlist. A disallowed origin returns 403, so it does not pollute unhandled-error logs.
 - `helmet` security headers; `x-powered-by` removed.
 - Upstream calls use `AbortSignal` timeouts, refuse redirects, and cap response size.
@@ -128,7 +132,7 @@ When the provider returns neither `us_aqi` nor `pm2_5`, the service does not gue
 
 ## Tests
 
-231 tests, no network access. Both upstream services are mocked and the Bedrock client is never constructed.
+256 tests, no network access. Both upstream services are mocked and the Bedrock client is never constructed.
 
 | File | Covers |
 |---|---|

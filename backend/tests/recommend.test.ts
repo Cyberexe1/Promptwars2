@@ -8,6 +8,7 @@ import {
 import { CATALOGUE, findCatalogueItem } from '../src/domain/catalogue.js';
 import { deriveGuardrails } from '../src/domain/risk.js';
 import { pm25ToUsAqi } from '../src/domain/aqi.js';
+import { buildOutlook, describeTiming } from '../src/domain/outlook.js';
 import type {
   AgeGroup,
   Budget,
@@ -15,6 +16,7 @@ import type {
   CookingFuel,
   CurrentAirQuality,
   HouseholdProfile,
+  Outlook,
   RiskLevel,
 } from '../src/types.js';
 
@@ -188,6 +190,243 @@ describe('selectRecommendations across every profile and band', () => {
       const ids = plan.recommendations.map((item) => item.id);
       expect(ids).not.toContain('shift-outdoor-activity');
       expect(ids).not.toContain('soften-outdoor-exercise');
+    }
+  });
+
+  // The brief this project answers asks for low-emission routines and
+  // sustainable alternatives, not only protection. Priority order alone used
+  // to bury every emission action below every protective one, so a household
+  // at an unhealthy reading got six ways to avoid the air and no way to
+  // improve it. These two tests are what stop that returning.
+  it('always includes at least one action that reduces emissions', () => {
+    for (const testCase of cases) {
+      const plan = buildRulesPlan({
+        location: LOCATION,
+        profile: testCase.profile,
+        current: reading(AQI_BY_LEVEL[testCase.level]),
+      });
+
+      const emissionActions = plan.recommendations.filter(
+        (item) => item.reducesEmissions,
+      );
+
+      expect(
+        emissionActions.length,
+        `no emission-reducing action for ${testCase.level} / ${JSON.stringify(testCase.profile)}`,
+      ).toBeGreaterThan(0);
+    }
+  });
+
+  it('still includes one at the worst readings, where protection dominates', () => {
+    const severe = cases.filter((testCase) =>
+      ['unhealthy', 'very-unhealthy', 'hazardous'].includes(testCase.level),
+    );
+    expect(severe.length).toBeGreaterThan(0);
+
+    for (const testCase of severe) {
+      const plan = buildRulesPlan({
+        location: LOCATION,
+        profile: testCase.profile,
+        current: reading(AQI_BY_LEVEL[testCase.level]),
+      });
+      expect(
+        plan.recommendations.some((item) => item.reducesEmissions),
+      ).toBe(true);
+    }
+  });
+});
+
+describe('timing advice follows the forecast', () => {
+  const OUTDOOR_PROFILE = {
+    ageGroups: ['adult'] as AgeGroup[],
+    sensitive: false,
+    commuteMethod: 'walk' as CommuteMethod,
+    outdoorMinutes: 60,
+    cookingFuel: 'gas' as CookingFuel,
+    purifier: false,
+    budget: 'medium' as Budget,
+  };
+
+  function planWithOutlook(aqi: number, outlook: Outlook | undefined) {
+    return buildRulesPlan({
+      location: LOCATION,
+      profile: OUTDOOR_PROFILE,
+      current: reading(aqi),
+      ...(outlook ? { outlook } : {}),
+    });
+  }
+
+  function outlookFrom(values: number[], utcOffsetSeconds = 0): Outlook {
+    const hourMs = 60 * 60 * 1000;
+    const base = Math.floor(Date.now() / hourMs) * hourMs;
+    return buildOutlook(
+      {
+        time: values.map((_, i) => (base + i * hourMs) / 1000),
+        usAqi: values,
+        utcOffsetSeconds,
+      },
+      base,
+    )!;
+  }
+
+  it('names the forecast cleanest hour instead of a fixed time of day', () => {
+    const plan = planWithOutlook(80, outlookFrom([90, 88, 40, 95, 92, 91]));
+    const shift = plan.recommendations.find(
+      (item) => item.id === 'shift-outdoor-activity',
+    );
+
+    expect(shift).toBeDefined();
+    expect(shift!.action).not.toMatch(/early afternoon/i);
+    expect(shift!.action).toMatch(/cleanest hour forecast/i);
+  });
+
+  it('withdraws the advice when no hour ahead is cleaner', () => {
+    // A flat series is the usual shape of severe smog, and the old fixed
+    // wording told people to go out at a time that was no better.
+    const plan = planWithOutlook(80, outlookFrom([184, 186, 183, 190, 188]));
+    const shift = plan.recommendations.find(
+      (item) => item.id === 'shift-outdoor-activity',
+    );
+
+    expect(shift).toBeDefined();
+    expect(shift!.action).toMatch(/no cleaner window/i);
+    expect(shift!.action).not.toMatch(/\d(am|pm)/i);
+  });
+
+  it('keeps the reviewed wording when there is no forecast at all', () => {
+    const plan = planWithOutlook(80, undefined);
+    const shift = plan.recommendations.find(
+      (item) => item.id === 'shift-outdoor-activity',
+    );
+
+    expect(shift!.action).toMatch(/early afternoon/i);
+  });
+
+  it('never invents an hour the forecast did not name', () => {
+    const outlook = outlookFrom([90, 88, 40, 95], 0);
+    const timing = describeTiming(outlook)!;
+    const allowed = new Set(
+      [timing.cleanestLabel, timing.worstLabel]
+        .filter((label): label is string => label !== null)
+        .map((label) => label.toLowerCase()),
+    );
+
+    const plan = planWithOutlook(80, outlook);
+    for (const item of plan.recommendations) {
+      for (const hour of item.action.match(/\d{1,2}(am|pm)/gi) ?? []) {
+        expect(allowed).toContain(hour.toLowerCase());
+      }
+    }
+  });
+});
+
+describe('budget changes the plan', () => {
+  // `budget` was read in exactly one place in the whole domain layer, to offer
+  // a low-cost filter build. `medium` and `high` produced byte-identical
+  // plans, so a user toggling that choice saw nothing happen.
+  function idsForBudget(budget: Budget): string[] {
+    return buildRulesPlan({
+      location: LOCATION,
+      profile: {
+        ageGroups: ['child', 'adult'],
+        sensitive: false,
+        commuteMethod: 'public-transport',
+        outdoorMinutes: 60,
+        cookingFuel: 'gas',
+        purifier: false,
+        budget,
+      },
+      current: reading(160),
+    }).recommendations.map((item) => item.id);
+  }
+
+  it('gives a different plan at each budget level', () => {
+    const low = idsForBudget('low');
+    const medium = idsForBudget('medium');
+    const high = idsForBudget('high');
+
+    expect(low).not.toEqual(medium);
+    expect(medium).not.toEqual(high);
+    expect(low).not.toEqual(high);
+  });
+
+  it('matches the spending advice to what the household can spend', () => {
+    expect(idsForBudget('low')).toContain('low-cost-filter-box');
+    expect(idsForBudget('medium')).toContain('buy-room-purifier');
+    expect(idsForBudget('high')).toContain('induction-instead-of-gas');
+  });
+
+  it('never advises buying a purifier to someone who has one', () => {
+    for (const budget of ['low', 'medium', 'high'] as Budget[]) {
+      const ids = buildRulesPlan({
+        location: LOCATION,
+        profile: {
+          ageGroups: ['adult'],
+          sensitive: false,
+          commuteMethod: 'walk',
+          outdoorMinutes: 30,
+          cookingFuel: 'gas',
+          purifier: true,
+          budget,
+        },
+        current: reading(160),
+      }).recommendations.map((item) => item.id);
+
+      expect(ids).not.toContain('buy-room-purifier');
+      expect(ids).not.toContain('low-cost-filter-box');
+    }
+  });
+});
+
+describe('catalogue flags', () => {
+  it('marks exactly the entries that cut pollution at source', () => {
+    const emission = CATALOGUE.filter((item) => item.reducesEmissions).map(
+      (item) => item.id,
+    );
+    // Pinned deliberately. Adding an entry here is a claim that the action
+    // reduces what is emitted, not merely what the household breathes, and
+    // that claim should be made on purpose rather than by habit.
+    expect(emission.sort()).toEqual(
+      [
+        'induction-instead-of-gas',
+        'move-off-biomass',
+        'no-idling',
+        'no-waste-burning',
+        'reduce-indoor-smoke',
+        'swap-car-trips',
+      ].sort(),
+    );
+  });
+
+  it('keeps at least two emission actions applicable to every household', () => {
+    // The reserved slot can only be honoured if something always qualifies.
+    const alwaysApplicable = CATALOGUE.filter(
+      (item) =>
+        item.reducesEmissions &&
+        item.applies({
+          profile: {
+            ageGroups: ['adult'],
+            sensitive: false,
+            commuteMethod: 'work-from-home',
+            outdoorMinutes: 0,
+            cookingFuel: 'electric',
+            purifier: true,
+            budget: 'high',
+          },
+          effectiveLevel: 'hazardous',
+          guardrails: deriveGuardrails('hazardous'),
+        }),
+    );
+    expect(alwaysApplicable.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('never marks an item community-shareable without a shared effect', () => {
+    for (const item of CATALOGUE) {
+      if (item.communityBenefit) {
+        expect(item.communityImpact.toLowerCase()).not.toMatch(
+          /^none directly\.?$/,
+        );
+      }
     }
   });
 });

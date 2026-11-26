@@ -11,6 +11,13 @@ import type {
  *
  * The base URL is injected at build time. There are no credentials or API keys
  * in the browser: every upstream key stays on the server.
+ *
+ * An empty `VITE_API_URL` is meaningful, not missing: it makes every call
+ * same-origin, which is what the deployed build uses now that CloudFront
+ * proxies /api/* to App Runner. That matters because the session cookie is
+ * `SameSite=Lax`, and a browser will not attach it to a cross-site fetch, so
+ * calling the App Runner host directly left a signed-in user looking signed
+ * out. `??` rather than `||` for exactly that reason.
  */
 const API_BASE_URL = (
   import.meta.env.VITE_API_URL ?? 'http://localhost:3000'

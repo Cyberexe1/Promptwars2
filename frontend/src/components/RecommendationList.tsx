@@ -31,6 +31,15 @@ function RecommendationCard({ item }: { item: Recommendation }) {
       </dl>
 
       <ul className="tag-list">
+        {/*
+          Marked explicitly because the distinction is the point of the brief
+          and invisible otherwise: most advice here protects the household from
+          the air, while a few actions make the air itself better. A reader
+          cannot tell which is which from the wording alone.
+        */}
+        {item.reducesEmissions && (
+          <li className="tag tag-emission">Cuts pollution at source</li>
+        )}
         <li className="tag">{COST_LABELS[item.cost]}</li>
         <li className="tag">{EFFORT_LABELS[item.effort]}</li>
         <li className="tag">Evidence: {CONFIDENCE_LABELS[item.confidence]}</li>

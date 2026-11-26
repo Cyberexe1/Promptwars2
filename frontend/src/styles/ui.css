@@ -260,6 +260,20 @@
   background: var(--surface-sunken);
 }
 
+/*
+  Marks advice that reduces pollution rather than only avoiding it.
+  Reuses the --risk-good token rather than introducing a colour, so the pair is
+  already covered by the computed contrast checks in contrast.test.ts: it
+  clears AAA for normal text on --surface and is well above the 3:1 that
+  WCAG 1.4.11 requires of the border.
+*/
+.tag-emission {
+  color: var(--risk-good);
+  background: var(--surface);
+  border-color: var(--risk-good);
+  font-weight: 600;
+}
+
 /* ----- Skeleton placeholders ----- */
 
 .skeleton {

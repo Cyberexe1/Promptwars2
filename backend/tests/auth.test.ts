@@ -169,13 +169,39 @@ describe('POST /api/auth/signup', () => {
     expect(duplicate.status).toBe(409);
   });
 
-  it('does not confirm that an address is registered', async () => {
+  it('is enumerable by status code, which is a known and accepted limit', async () => {
+    // This test exists to stop the gap being forgotten, not to approve of it.
+    // A taken address answers 409 and a free one 201, so a caller learns
+    // whether an account exists. That cannot be closed while signup also
+    // signs the user in, because the caller learns the answer from whether
+    // they end up with a session whatever the body says. Closing it properly
+    // needs a verified email channel, so signup can say "check your inbox"
+    // either way. Recorded in docs/limitations.md.
+    //
+    // If a verified email channel is ever added, delete this test and assert
+    // that both cases return the same status and body.
     await signup();
     const duplicate = await signup();
 
-    // Wording must not single out "this email exists".
+    expect(duplicate.status).toBe(409);
+
+    // What is guaranteed meanwhile: the wording does not volunteer the detail,
+    // and the attempt costs the same per-account budget as a failed login, so
+    // enumeration is rate-limited rather than free.
     expect(duplicate.body.error.message).toMatch(/cannot be used to register/i);
     expect(duplicate.body.error.message).not.toMatch(/already|taken|exists/i);
+  });
+
+  it('spends a throttle slot on a duplicate, so probing is bounded', async () => {
+    await signup('probe@example.com');
+
+    let lastStatus = 0;
+    for (let attempt = 0; attempt < 12; attempt += 1) {
+      lastStatus = (await signup('probe@example.com')).status;
+      if (lastStatus === 429) break;
+    }
+
+    expect(lastStatus).toBe(429);
   });
 });
 

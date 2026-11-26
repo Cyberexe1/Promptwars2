@@ -16,11 +16,37 @@ Written plainly, because a reviewer finding these unlisted is worse than reading
 
 **App Runner is in maintenance mode.** AWS closed it to new customers on 30 April 2026 and plans no new features ([AWS notice](https://docs.aws.amazon.com/apprunner/latest/dg/apprunner-availability-change.html)). The template targets it because it was the requested platform, and it still works for accounts that used the service before that date. An ineligible account needs Amazon ECS Express Mode instead; only the compute service changes. The eligibility check is the first thing in [`infrastructure/README.md`](../infrastructure/README.md).
 
+**Password hashing is queued, not parallel.** scrypt at these parameters needs
+about 32 MB per hash, and the service runs on a 0.5 GB instance that accepts up
+to 50 concurrent requests, so roughly sixteen simultaneous hashes would exhaust
+memory. Only four run at once; the rest wait. Under a burst of sign-in attempts
+that adds latency rather than failing, which was the better of the three
+options: cutting the cost parameters would make stolen hashes cheaper to crack,
+and a larger instance costs money for a demo.
+
 **Login throttle state is per instance.** Failed attempts are counted per account in process memory, so with more than one instance running an attacker gets one budget per instance. Making it global means a DynamoDB write on every failed attempt. The per-address rate limiter stays as the backstop, and the single-instance configuration means this is currently exact.
 
 **There is no AWS WAF.** CloudFront and App Runner are protected by application-level rate limiting, CORS, and request-size caps, not by a managed rule set. A WAF would add rate-based blocking at the edge and common-attack rules; it costs about $6 per month plus per-request charges, which was not justified for a demo.
 
+**Only 6 of 25 catalogue entries reduce emissions.** The rest reduce exposure:
+stay in, close the windows, filter one room, wear a respirator. The selector
+reserves a slot so at least one emission-reducing action appears in every plan,
+and the whole household matrix asserts it, but the balance of the catalogue
+still leans towards protection over reduction. Writing more emission entries is
+content work, not engineering, and each one needs to be defensible.
+
 **Request and response shapes are duplicated by hand.** The frontend declares its own types matching the backend's Zod schemas. Nothing fails the build if the two drift apart; a shared package or generated types would close that gap.
+
+**Signup reveals whether an address is registered.** A taken address answers
+409 and a free one 201. This cannot be closed while signup also signs the user
+in, because the caller learns the answer from whether they end up with a
+session whatever the response body says; returning a uniform 202 and making
+everyone sign in afterwards only moves the oracle to the login attempt, at the
+cost of friction for every real user. Closing it needs a verified email
+channel, so signup can answer "check your inbox" either way. Meanwhile a
+duplicate spends the same per-account throttle budget as a failed login, so
+enumeration is rate-limited rather than free, and `auth.test.ts` asserts the
+gap explicitly so it cannot be quietly forgotten.
 
 **Sessions cannot be revoked server-side.** Tokens are stateless and HMAC-signed, so logging out clears the cookie but cannot invalidate a copy taken beforehand. Tokens expire after seven days and carry a token id, so a denylist can be added if immediate revocation becomes a requirement. Rotating `SESSION_SECRET` invalidates every session at once, which is the emergency control.
 
@@ -38,38 +64,30 @@ Written plainly, because a reviewer finding these unlisted is worse than reading
 
 **`MinSize: 1` on App Runner.** Avoids cold starts, bills while idle. The dominant running cost.
 
-**Session cookies will not survive a cross-site fetch in the current
-deployment.** The frontend is on CloudFront and the API on App Runner, which
-are different sites, and the session cookie is `SameSite=Lax`. A browser will
-not attach it to the frontend's `fetch`, so a signed-in user can appear signed
-out. The live smoke tests do not catch this because `curl` ignores SameSite
-entirely. The fix is a CloudFront `/api` behaviour so both share an origin, not
-`SameSite=None`, which would discard a real CSRF defence.
-
-**Emission-reducing advice is crowded out exactly when it matters.** Of 22
-catalogue entries only four clearly reduce emissions rather than exposure:
-`move-off-biomass`, `swap-car-trips`, `no-waste-burning`, `no-idling`. All but
-the first rank below every protective item, and the selector fills the plan by
-priority. At a high AQI reading a car-commuting household typically gets one
-emission item out of six; at a clean reading they get more. The app therefore
-gives its best sustainability advice when the air is already good. Nothing in
-the test matrix asserts otherwise, so this is unguarded as well as unfixed.
-
-**`cleanestHour` is computed, displayed, and then ignored by the advice.**
-`domain/outlook.ts` works out the cleanest and worst hours ahead and the chart
-shows them, but `shift-outdoor-activity` still says "the early afternoon" as a
-fixed string, and the hourly series is never sent to the model. On a flat
-series, which is common in severe smog, that advice is unusable and the app has
-the data to know it.
-
-**`budget` barely does anything.** It is read once in the whole domain layer,
-to offer a low-cost filter build. `medium` and `high` produce identical plans.
+**Browser sign-in has not been confirmed since the routing change.** The
+session cookie is `SameSite=Lax`, and until recently the page was on CloudFront
+while the API was on App Runner. Those are different sites, so a browser would
+not attach the cookie to the page's `fetch` and a signed-in user appeared
+signed out. `05-frontend.yaml` now proxies `/api/*` through the distribution
+and the bundle is built with an empty `VITE_API_URL`, which makes every call
+same-origin. The deployed stack still needs a redeploy for that to take effect,
+and the check has to be done in a real browser: `curl` ignores SameSite, so the
+scripted smoke tests pass either way. Deliberately not fixed by relaxing the
+cookie to `SameSite=None`, which would discard a genuine CSRF defence to work
+around a deployment topology.
 
 ## Accuracy
 
 **Impact statements are estimates, not measurements.** They describe a mechanism and a direction, with an evidence rating of well established, reasonably supported, or limited. No percentage is claimed anywhere, and a test asserts that no catalogue entry contains one. The application has no sensor on anyone's street.
 
 **The PM2.5 fallback disagrees with the provider.** When `us_aqi` is missing, a US AQI is computed from PM2.5 using the EPA breakpoints effective May 2024. This is an approximation: the official index uses a 24-hour rolling average and takes the worst sub-index across several pollutants. Observed in practice, Delhi at 69.6 µg/m³ produced 161 from the fallback against the provider's 183. The response says `estimated from PM2.5` whenever this path is used.
+
+**Timing advice is only as good as the forecast.** The plan names the cleanest
+hour the provider forecasts, in local time at the place being looked up, and
+withdraws retiming advice when the next 12 hours sit within 15 AQI points of
+each other. That threshold is a judgement, not a published figure. The forecast
+is Open-Meteo's and is not validated against later observations, so the named
+hour can be wrong in the ordinary way forecasts are wrong.
 
 **Risk bands follow the US EPA scale everywhere.** Air-quality standards differ by country. The European index is displayed alongside with an explicit note that the two are not interchangeable, but the advice thresholds are American. A user in Europe or India sees guidance calibrated to US breakpoints.
 
@@ -87,7 +105,7 @@ to offer a low-cost filter build. `medium` and `high` produce identical plans.
 
 ## Testing boundaries
 
-477 tests pass and none touch the network: upstream services are mocked in the backend, `fetch` is stubbed in the frontend, and the Bedrock client is never constructed.
+510 tests pass and none touch the network: upstream services are mocked in the backend, `fetch` is stubbed in the frontend, and the Bedrock client is never constructed.
 
 That is also the limit. These tests prove the code behaves as written against fixtures. They do not prove that Open-Meteo's response shape is still what the schema expects, that Bedrock returns usable prose, or that CloudFront serves the headers the template specifies. Scripts in [`infrastructure/`](../infrastructure/) check those against the deployed stack instead: `audit-live.ps1` asserts health, live readings, signup, CORS rejection, SPA fallback, and security headers; `verify-bedrock.ps1` confirms a plan came back from the model rather than the rules fallback; `verify-throttle.ps1` drives the login throttle to 429. They have been run against the live deployment and pass.
 

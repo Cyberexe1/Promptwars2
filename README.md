@@ -150,7 +150,7 @@ Verified against the running deployment:
 
 ## Current Status
 
-**All three phases are complete and deployed.** 477 tests pass with enforced coverage floors, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the stack is live on AWS. What remains needs a human: a manual screen-reader pass, real-device testing, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
+**All three phases are complete and deployed.** 510 tests pass with enforced coverage floors, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the stack is live on AWS. What remains needs a human: a manual screen-reader pass, real-device testing, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
 
 | Area | State |
 |---|---|
@@ -159,8 +159,8 @@ Verified against the running deployment:
 | Privacy page | Built, every claim linked to the code behind it |
 | Saved plans | Built, device-local with user-controlled deletion |
 | Community checklist | Built, household and health details stripped |
-| React frontend | 246 tests passing, 94% statement coverage |
-| Node.js API | 231 tests passing, 85% statement coverage |
+| React frontend | 254 tests passing, 94% statement coverage |
+| Node.js API | 256 tests passing, 85% statement coverage |
 | 24-hour outlook | Names the cleanest and worst hours ahead, so "shift your outdoor time" is actionable |
 | Live air-quality data | Working against Open-Meteo, no API key required |
 | Risk and recommendation rules | Complete, verified over 1,000+ household and band combinations |
@@ -412,7 +412,7 @@ All write endpoints validate input, limit payload size, and enforce rate limits.
 
 - [x] Finalize the target users, supported locations, and AQI standard. US EPA AQI, with PM2.5 breakpoints per the May 2024 revision.
 - [x] Select an air-quality data provider and confirm its usage terms. Open-Meteo, free and keyless.
-- [x] Define the recommendation catalogue, risk bands, and safety rules. 22 reviewed entries in `backend/src/domain/catalogue.ts` (7 routine, 8 indoor, 4 transport, 3 health). No impact factors: see [Impact explanations](#impact-explanations).
+- [x] Define the recommendation catalogue, risk bands, and safety rules. 25 reviewed entries in `backend/src/domain/catalogue.ts` (7 routine, 11 indoor, 4 transport, 3 health). No impact factors: see [Impact explanations](#impact-explanations).
 - [x] Define API contracts and structured GenAI response schemas.
 - [ ] Create accessible wireframes for mobile and desktop layouts. Skipped: built the responsive layout directly and verified it with accessibility tests.
 
@@ -516,7 +516,7 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 - [x] Add saved plans and user-controlled deletion. Device-local, with single and bulk delete behind a confirmation
 - [x] Add accounts. Built directly rather than with Cognito: signup and login over a scrypt hash and a signed httpOnly cookie, which avoids a hosted UI and a second user directory for no capability this app needs. Plans still stay on the device.
 - [x] Add community checklists that contain no private household or health data. Subtractive by design, asserted by tests
-- [x] Refine low-emission routines, indoor air-quality guidance, and sustainable alternatives. 22 reviewed catalogue entries across four categories. **Known weakness:** only 4 of the 22 reduce emissions rather than exposure, and they rank below every protective item, so they are crowded out at high AQI. See [`docs/limitations.md`](docs/limitations.md)
+- [x] Refine low-emission routines, indoor air-quality guidance, and sustainable alternatives. 25 reviewed catalogue entries across four categories, 6 of which cut pollution at source rather than only reducing exposure. The selector reserves a slot for one of those, so an emission-reducing action appears in every plan rather than being crowded out at the readings that bring people to the app. Asserted across the full household matrix
 - [x] Show the method, source, and uncertainty behind impact estimates. Every card carries an evidence rating; no entry claims a percentage
 - [x] Add general guidance for stale or unavailable live AQI data. Readings over three hours old are flagged; a missing reading reports `Unknown` with precautionary advice
 - [ ] Add optional localization and plain-language content where time permits. **Not done.** English only, which is a real barrier in the worst-affected cities
@@ -603,6 +603,6 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 - [x] The README explains the vertical, approach, logic, operation, and assumptions.
 - [x] Setup, test, and deployment instructions are verified. Every local command was run; deployment commands are scripted but unapplied
 - [x] No credentials, tokens, personal information, or `.env` files are committed. Only `.env.example`; CI also runs Gitleaks over full history
-- [x] The application includes tests and accessibility checks. 477 tests, including axe on every route and 40 computed contrast assertions
+- [x] The application includes tests and accessibility checks. 510 tests, including axe on every route and 42 computed contrast assertions
 - [ ] The video is unlisted on YouTube or shared through a publicly accessible Drive link.
 - [ ] The public GitHub repository URL is submitted within the allowed three attempts.

@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import { config } from '../config.js';
 import { fetchJson } from './httpClient.js';
+import { upstreamUnavailable } from '../utils/errors.js';
+import { logger } from '../utils/logger.js';
 import type { LocationSuggestion } from '../types.js';
 
 /**
@@ -38,7 +40,15 @@ export async function searchLocations(query: string): Promise<LocationSuggestion
 
   const parsed = geocodingResponseSchema.safeParse(raw);
   if (!parsed.success) {
-    return [];
+    // Was `return []`, which the route rendered as a 200 with no results and
+    // the interface showed as "no places found for X, try another spelling".
+    // A broken provider was indistinguishable from a typo, and nothing was
+    // logged either, so the failure was invisible from both ends. The
+    // air-quality service treats the same condition as a 503; these now agree.
+    logger.warn('geocoding_schema_rejected');
+    throw upstreamUnavailable(
+      'The location search service returned data in an unexpected format. Please try again shortly.',
+    );
   }
 
   return (parsed.data.results ?? []).map((result) => {

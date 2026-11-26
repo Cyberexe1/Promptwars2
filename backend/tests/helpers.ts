@@ -1,6 +1,6 @@
 import request from 'supertest';
 import type { Express } from 'express';
-import { CSRF_COOKIE, CSRF_HEADER } from '../src/middleware/csrf.js';
+import { createCsrfToken, CSRF_COOKIE, CSRF_HEADER } from '../src/middleware/csrf.js';
 
 /**
  * Shared test helpers.
@@ -10,8 +10,16 @@ import { CSRF_COOKIE, CSRF_HEADER } from '../src/middleware/csrf.js';
  * checking, rather than repeating the plumbing.
  */
 
-/** Any value works: the check is that cookie and header agree. */
-export const TEST_CSRF = 'test-csrf-token';
+/**
+ * A token the server would actually have issued.
+ *
+ * This used to be the literal string 'test-csrf-token', on the reasoning that
+ * any value works because the check is only that cookie and header agree.
+ * That was true, and it was the weakness: two attacker-set values agree with
+ * each other too. Tokens are now signed, so the tests have to use a real one,
+ * which is the point. `csrf.test.ts` covers rejection of forged values.
+ */
+export const TEST_CSRF = createCsrfToken();
 
 /** POSTs JSON with a valid CSRF pair, plus any extra cookies. */
 export function postJson(

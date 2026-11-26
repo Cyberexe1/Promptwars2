@@ -15,6 +15,11 @@ function outlook(values: (number | null)[], overrides: Partial<Outlook> = {}): O
     hours: values.map((usAqi, index) => ({ time: iso(index), usAqi })),
     cleanestHour: null,
     worstHour: null,
+    // Zero, so the existing cases keep asserting UTC labels. The chart labels
+    // hours in local time at the place being looked up, not in the browser's
+    // zone, which is covered separately below.
+    utcOffsetSeconds: 0,
+    windowSpread: null,
     ...overrides,
   };
 }
@@ -35,6 +40,36 @@ describe('OutlookChart', () => {
     );
 
     expect(screen.getByText(/cleanest hour ahead/i)).toBeInTheDocument();
+  });
+
+  it('labels hours in local time at the location, not in the browser zone', () => {
+    // BASE is 09:00 UTC, so index 2 is 11:00 UTC. With Delhi's +05:30 offset
+    // that is 16:30 there. Someone in London checking Delhi needs the Delhi
+    // hour: the backend writes the advice text using this same offset, so a
+    // chart on browser time would contradict the plan beside it.
+    render(
+      <OutlookChart
+        outlook={outlook([180, 170, 60, 150], {
+          cleanestHour: iso(2),
+          utcOffsetSeconds: 5.5 * 3600,
+        })}
+      />,
+    );
+
+    // Appears in both the highlight text and the screen-reader table, which
+    // is the point: they have to agree.
+    expect(screen.getAllByText('16:30').length).toBeGreaterThan(0);
+    expect(screen.queryByText('11:00')).not.toBeInTheDocument();
+  });
+
+  it('falls back to UTC labels when no offset is supplied', () => {
+    render(
+      <OutlookChart
+        outlook={outlook([180, 170, 60, 150], { cleanestHour: iso(2) })}
+      />,
+    );
+
+    expect(screen.getAllByText('11:00').length).toBeGreaterThan(0);
   });
 
   it('names the worst hour when the forecast has a peak', () => {

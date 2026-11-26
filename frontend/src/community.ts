@@ -14,11 +14,8 @@ import type { Recommendation, RecommendationsResponse } from './types';
  *   - `personalImpact`, which describes one household's exposure
  *   - `effectiveLevel`, which is escalated for sensitive households and so
  *     implies a health detail
- *   - any recommendation whose community effect is "none directly"
+ *   - any recommendation the catalogue does not mark as community-beneficial
  */
-
-/** Marks an item as having no shared benefit, so it is personal-only. */
-const NO_COMMUNITY_EFFECT = /^none directly/i;
 
 export interface CommunityItem {
   id: string;
@@ -37,8 +34,17 @@ export interface CommunityChecklist {
   items: CommunityItem[];
 }
 
+/**
+ * Reads the catalogue's own flag rather than inspecting the prose.
+ *
+ * This used to match `communityImpact` against /^none directly/i. That field
+ * is one of the four the language model is allowed to reword, so a reword to
+ * "No direct effect on the area." would have passed the test and published a
+ * personal-only item to a shared checklist. The flag is set in code and the
+ * model cannot touch it.
+ */
 export function hasCommunityBenefit(recommendation: Recommendation): boolean {
-  return !NO_COMMUNITY_EFFECT.test(recommendation.communityImpact.trim());
+  return recommendation.communityBenefit;
 }
 
 export function buildCommunityChecklist(

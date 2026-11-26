@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { loadConfig } from '../src/config.js';
 import { LoginThrottle } from '../src/middleware/loginThrottle.js';

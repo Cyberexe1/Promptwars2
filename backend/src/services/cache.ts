@@ -6,9 +6,46 @@ import {
   GetCommand,
   PutCommand,
 } from '@aws-sdk/lib-dynamodb';
+import { z } from 'zod';
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 import type { CurrentAirQuality, DataSource, Outlook } from '../types.js';
+
+const nullableNumber = z.number().nullable();
+
+/**
+ * Shape a cached item must have to be trusted.
+ *
+ * Mirrors `CachedReading`. Unknown keys are stripped rather than rejected, so
+ * an item written by a newer version that added a field is still usable.
+ */
+const cachedReadingSchema = z.object({
+  current: z.object({
+    usAqi: nullableNumber,
+    europeanAqi: nullableNumber,
+    pm25: nullableNumber,
+    pm10: nullableNumber,
+    nitrogenDioxide: nullableNumber,
+    ozone: nullableNumber,
+    observedAt: z.string().min(1),
+  }),
+  source: z.object({
+    name: z.string().min(1),
+    url: z.string().url(),
+    retrievedAt: z.string().min(1),
+  }),
+  outlook: z
+    .object({
+      hours: z.array(
+        z.object({ time: z.string().min(1), usAqi: nullableNumber }),
+      ),
+      cleanestHour: z.string().nullable(),
+      worstHour: z.string().nullable(),
+      utcOffsetSeconds: z.number().default(0),
+      windowSpread: z.number().nullable().default(null),
+    })
+    .optional(),
+});
 
 /**
  * Air-quality reading cache.
@@ -147,10 +184,21 @@ export class DynamoDbAirQualityCache implements AirQualityCache {
         return null;
       }
 
+      // Parsed, not cast. Every other external input in this service goes
+      // through a schema; the cache was the exception, and it is shared
+      // between instances, so a single bad writer could have poisoned the
+      // readings served to everyone and fed that text into the model prompt.
+      // A malformed item is treated as a miss, which costs one upstream call.
+      const parsed = cachedReadingSchema.safeParse(item);
+      if (!parsed.success) {
+        logger.warn('aqi_cache_item_rejected');
+        return null;
+      }
+
       return {
-        current: item.current as CurrentAirQuality,
-        source: item.source as DataSource,
-        ...(item.outlook ? { outlook: item.outlook as Outlook } : {}),
+        current: parsed.data.current,
+        source: parsed.data.source,
+        ...(parsed.data.outlook ? { outlook: parsed.data.outlook } : {}),
       };
     } catch (error) {
       logger.warn('aqi_cache_read_failed', {
@@ -162,6 +210,7 @@ export class DynamoDbAirQualityCache implements AirQualityCache {
 
   async put(key: string, value: CachedReading): Promise<void> {
     try {
+      const nowSeconds = Math.floor(this.now() / 1000);
       await this.client.send(
         new PutCommand({
           TableName: this.tableName,
@@ -172,7 +221,18 @@ export class DynamoDbAirQualityCache implements AirQualityCache {
             source: value.source,
             ...(value.outlook ? { outlook: value.outlook } : {}),
             // TTL attribute must be epoch seconds.
-            expiresAt: Math.floor(this.now() / 1000) + this.ttlSeconds,
+            expiresAt: nowSeconds + this.ttlSeconds,
+            writtenAt: nowSeconds,
+          },
+          // Only overwrite an entry that is absent, expired, or older than
+          // this one. Without it, any writer could replace a fresh reading
+          // with an arbitrary one at a known key; with it, a stale or
+          // out-of-order write loses rather than winning by arriving last.
+          ConditionExpression:
+            'attribute_not_exists(pk) OR expiresAt <= :now OR attribute_not_exists(writtenAt) OR writtenAt <= :writtenAt',
+          ExpressionAttributeValues: {
+            ':now': nowSeconds,
+            ':writtenAt': nowSeconds,
           },
         }),
       );

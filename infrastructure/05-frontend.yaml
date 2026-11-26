@@ -26,17 +26,21 @@ Parameters:
 
   ApiOrigin:
     Type: String
-    Description: >
-      The backend origin the page is allowed to call, as
-      https://xxxx.awsapprunner.com. Added to the Content-Security-Policy
-      connect-src list. Leave empty on the first deployment, then redeploy
-      with the real value once App Runner exists.
+    Description: >-
+      The App Runner origin, as https://xxxx.awsapprunner.com. Serves two
+      purposes: it becomes a second CloudFront origin so /api/* is proxied
+      through this distribution, which keeps the page and the API same-site so
+      the session cookie works, and it is added to the Content-Security-Policy
+      connect-src list for anything still calling the API directly. Leave
+      empty on the first deployment, then redeploy with the real value once
+      App Runner exists.
     Default: ''
 
 Conditions:
   HasCustomDomain: !And
     - !Not [!Equals [!Ref DomainName, '']]
     - !Not [!Equals [!Ref CertificateArn, '']]
+  HasApiOrigin: !Not [!Equals [!Ref ApiOrigin, '']]
 
 Resources:
   WebBucket:
@@ -161,6 +165,16 @@ Resources:
             S3OriginConfig:
               # Empty when using OAC rather than the legacy OAI.
               OriginAccessIdentity: ''
+          - !If
+            - HasApiOrigin
+            - Id: ApiOrigin
+              # Host only: the origin domain cannot carry a scheme or a path.
+              DomainName: !Select [1, !Split ['://', !Ref ApiOrigin]]
+              CustomOriginConfig:
+                OriginProtocolPolicy: https-only
+                OriginSSLProtocols: [TLSv1.2]
+                OriginReadTimeout: 30
+            - !Ref AWS::NoValue
 
         DefaultCacheBehavior:
           TargetOriginId: S3Origin
@@ -174,6 +188,44 @@ Resources:
           ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
 
         CacheBehaviors:
+          # The API, served through this distribution so that the browser sees
+          # one site.
+          #
+          # Without this the page is on *.cloudfront.net and the API on
+          # *.awsapprunner.com, which are different sites, so a browser will
+          # not attach the SameSite=Lax session cookie to the page's fetch and
+          # a signed-in user appears signed out. The curl-based live smoke
+          # tests cannot catch it, because curl ignores SameSite.
+          #
+          # Routed here rather than relaxing the cookie to SameSite=None,
+          # which would throw away a real cross-site request forgery defence
+          # to work around a deployment topology.
+          - !If
+            - HasApiOrigin
+            - PathPattern: /api/*
+              TargetOriginId: ApiOrigin
+              ViewerProtocolPolicy: https-only
+              AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+              CachedMethods: [GET, HEAD]
+              Compress: true
+              # Managed-CachingDisabled: every response here is per-user.
+              CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+              # Managed-AllViewerExceptHostHeader. Forwards cookies, headers
+              # and query strings, but keeps the origin's own Host so App
+              # Runner routes the request. Forwarding the CloudFront host
+              # would make App Runner reject it.
+              OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
+              # Deliberately not SecurityHeadersPolicy: that policy sets a CSP
+              # for an HTML document, and these are JSON API responses. The
+              # API sets its own headers through helmet.
+            - !Ref AWS::NoValue
+          - PathPattern: /health
+            TargetOriginId: !If [HasApiOrigin, ApiOrigin, S3Origin]
+            ViewerProtocolPolicy: https-only
+            AllowedMethods: [GET, HEAD]
+            CachedMethods: [GET, HEAD]
+            CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
+            OriginRequestPolicyId: b689b0a8-53d0-40ab-baf2-68738e2966ac
           - PathPattern: /index.html
             TargetOriginId: S3Origin
             ViewerProtocolPolicy: redirect-to-https

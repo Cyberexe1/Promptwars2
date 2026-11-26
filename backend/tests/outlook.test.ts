@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildOutlook,
+  describeTiming,
+  FLAT_FORECAST_SPREAD,
   OUTLOOK_HOURS,
   RECOMMENDATION_WINDOW_HOURS,
   type RawHourly,
@@ -162,5 +164,48 @@ describe('buildOutlook', () => {
     for (let index = 1; index < stamps.length; index += 1) {
       expect(stamps[index]!).toBe(stamps[index - 1]! + HOUR_MS);
     }
+  });
+});
+
+describe('describeTiming', () => {
+  it('names the cleanest hour in local time at the location, not UTC', () => {
+    // 12:00 UTC is 17:30 in Delhi. A user in London checking Delhi must be
+    // told a Delhi hour.
+    const delhiOffset = 5.5 * 3600;
+    const raw = { ...series([180, 150, 190, 200, 185, 175]), utcOffsetSeconds: delhiOffset };
+    const timing = describeTiming(buildOutlook(raw, NOW_MS))!;
+
+    // Cleanest is index 1, i.e. 13:00 UTC, i.e. 18:30 local -> "6pm".
+    expect(timing.cleanestLabel).toBe('6pm');
+    expect(timing.flat).toBe(false);
+  });
+
+  it('defaults to UTC labelling when the provider omits an offset', () => {
+    const timing = describeTiming(buildOutlook(series([180, 150, 190]), NOW_MS))!;
+    expect(timing.cleanestLabel).toBe('1pm');
+  });
+
+  it('reports a flat forecast as flat, so no cleaner hour is implied', () => {
+    // The shape of severe smog: every hour within a few points.
+    const raw = { ...series([184, 186, 183, 190, 188, 185]), utcOffsetSeconds: 0 };
+    const outlook = buildOutlook(raw, NOW_MS)!;
+
+    expect(outlook.windowSpread).toBe(7);
+    expect(describeTiming(outlook)!.flat).toBe(true);
+  });
+
+  it('treats a spread at the threshold as not flat', () => {
+    const raw = { ...series([100, 100 + FLAT_FORECAST_SPREAD]), utcOffsetSeconds: 0 };
+    expect(describeTiming(buildOutlook(raw, NOW_MS))!.flat).toBe(false);
+  });
+
+  it('gives nothing to say when no hour carries a reading', () => {
+    expect(describeTiming(buildOutlook(series([null, null]), NOW_MS))).toBeUndefined();
+    expect(describeTiming(undefined)).toBeUndefined();
+  });
+
+  it('carries the provider offset onto the outlook for the client to use', () => {
+    const raw = { ...series([120, 130]), utcOffsetSeconds: -18000 };
+    expect(buildOutlook(raw, NOW_MS)!.utcOffsetSeconds).toBe(-18000);
   });
 });

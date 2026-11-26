@@ -59,6 +59,8 @@ export const PLAN: RecommendationsResponse = {
       cost: 'free',
       effort: 'moderate',
       confidence: 'high',
+      reducesEmissions: false,
+      communityBenefit: false,
     },
     {
       id: 'keep-windows-closed',
@@ -71,6 +73,8 @@ export const PLAN: RecommendationsResponse = {
       cost: 'free',
       effort: 'easy',
       confidence: 'high',
+      reducesEmissions: false,
+      communityBenefit: false,
     },
     {
       id: 'well-fitted-mask',
@@ -83,6 +87,8 @@ export const PLAN: RecommendationsResponse = {
       cost: 'low',
       effort: 'easy',
       confidence: 'high',
+      reducesEmissions: false,
+      communityBenefit: false,
     },
     {
       id: 'swap-car-trips',
@@ -95,6 +101,8 @@ export const PLAN: RecommendationsResponse = {
       cost: 'free',
       effort: 'moderate',
       confidence: 'high',
+      reducesEmissions: true,
+      communityBenefit: true,
     },
   ],
   generatedBy: 'rules',

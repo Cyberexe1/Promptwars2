@@ -15,6 +15,7 @@ function Step($name, $dir, $cmd) {
     }
 }
 
+Step 'backend lint'       'backend'  'npm run lint'
 Step 'backend typecheck'  'backend'  'npm run typecheck'
 Step 'backend tests'      'backend'  'npx vitest run'
 Step 'backend build'      'backend'  'npm run build'
@@ -25,11 +26,21 @@ Step 'frontend tests'     'frontend' 'npx vitest run'
 Step 'frontend build'     'frontend' 'npm run build'
 Step 'frontend audit'     'frontend' 'npm audit --audit-level=high'
 
-if (Get-Command cfn-lint -ErrorAction SilentlyContinue) {
-    Step 'cfn-lint templates' '.' 'cfn-lint'
+# pip installs console scripts into a per-user Scripts directory that is often
+# not on PATH, which made this silently skip and report 9 checks as a clean run.
+$cfnLint = (Get-Command cfn-lint -ErrorAction SilentlyContinue).Source
+if (-not $cfnLint) {
+    $cfnLint = Get-ChildItem -Path @(
+        (Join-Path $env:APPDATA 'Python\*\Scripts\cfn-lint.exe'),
+        (Join-Path $env:LOCALAPPDATA 'Programs\Python\*\Scripts\cfn-lint.exe')
+    ) -ErrorAction SilentlyContinue | Select-Object -First 1 -ExpandProperty FullName
+}
+
+if ($cfnLint) {
+    Step 'cfn-lint templates' '.' "& '$cfnLint' infrastructure\*.yaml"
 }
 else {
-    Write-Output 'cfn-lint not on PATH, skipping template validation'
+    Write-Output 'cfn-lint not found, skipping template validation (pip install cfn-lint)'
 }
 
 Write-Output ''

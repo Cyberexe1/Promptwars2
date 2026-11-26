@@ -105,6 +105,22 @@ export interface Outlook {
   cleanestHour: string | null;
   /** ISO time of the highest-AQI hour in the usable window, if any. */
   worstHour: string | null;
+  /**
+   * Seconds to add to a UTC time to get local time at the looked-up place.
+   *
+   * Needed because "go out at 2pm" means 2pm where the air is, not where the
+   * browser is. A user checking Delhi from London must not be told to go
+   * outside at a London hour.
+   */
+  utcOffsetSeconds: number;
+  /**
+   * AQI spread across the usable window, or null when nothing is forecast.
+   *
+   * Decides whether retiming advice is worth giving at all. In severe smog the
+   * series is often flat, and telling someone to shift their walk to a cleaner
+   * hour that is no cleaner is worse than saying there is no good window.
+   */
+  windowSpread: number | null;
 }
 
 export interface AirQualityResponse {
@@ -137,6 +153,10 @@ export interface Recommendation {
   cost: CostLevel;
   effort: EffortLevel;
   confidence: ConfidenceLevel;
+  /** Cuts pollution at source rather than only shielding the household. */
+  reducesEmissions: boolean;
+  /** Safe to publish in a shared checklist, and useful to others there. */
+  communityBenefit: boolean;
 }
 
 export interface RecommendationsResponse {

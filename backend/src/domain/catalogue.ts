@@ -38,6 +38,28 @@ export interface CatalogueItem {
   cost: CostLevel;
   effort: EffortLevel;
   confidence: ConfidenceLevel;
+  /**
+   * Cuts pollution at its source rather than only shielding the household
+   * from it. Closing a window protects you; not burning waste means there is
+   * less smoke for anyone to breathe.
+   *
+   * The brief this project answers asks for low-emission routines and
+   * sustainable alternatives, so the selector reserves a slot for one of
+   * these. Without that reservation they rank below every protective item and
+   * never appear at exactly the readings that bring people to the app.
+   */
+  reducesEmissions: boolean;
+  /**
+   * Safe and useful to publish in a shared community checklist, because the
+   * action helps people beyond the household and discloses nothing about it.
+   *
+   * A field, not a phrase: this was previously inferred by matching
+   * `communityImpact` against /^none directly/i, and that text is one of the
+   * four fields the language model is allowed to reword. A reword from
+   * "None directly." to "No direct effect on the area." silently promoted a
+   * private item into a shared checklist.
+   */
+  communityBenefit: boolean;
   /** Higher values are offered first when more items qualify than fit. */
   priority: number;
   applies: (context: RecommendationContext) => boolean;
@@ -66,6 +88,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 90,
     applies: (context) =>
       spendsTimeOutdoors(context) &&
@@ -88,6 +112,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 88,
     applies: (context) =>
       spendsTimeOutdoors(context) &&
@@ -107,6 +133,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'moderate',
     confidence: 'high',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 97,
     applies: (context) => !context.guardrails.allowAnyOutdoorExercise,
   },
@@ -124,6 +152,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'medium',
+    reducesEmissions: false,
+    communityBenefit: true,
     priority: 86,
     applies: (context) =>
       context.profile.ageGroups.includes('child') &&
@@ -143,6 +173,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: false,
+    communityBenefit: true,
     priority: 55,
     applies: () => true,
   },
@@ -160,6 +192,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'moderate',
     confidence: 'medium',
+    reducesEmissions: false,
+    communityBenefit: true,
     priority: 58,
     applies: () => true,
   },
@@ -177,6 +211,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: true,
+    communityBenefit: true,
     priority: 70,
     applies: () => true,
   },
@@ -195,6 +231,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'medium',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 75,
     applies: (context) => context.guardrails.allowWindowVentilation,
   },
@@ -211,6 +249,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 92,
     applies: (context) => !context.guardrails.allowWindowVentilation,
   },
@@ -227,6 +267,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 85,
     applies: (context) =>
       context.profile.cookingFuel === 'gas' ||
@@ -246,6 +288,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'medium',
     effort: 'moderate',
     confidence: 'high',
+    reducesEmissions: true,
+    communityBenefit: true,
     priority: 94,
     applies: (context) => context.profile.cookingFuel === 'biomass',
   },
@@ -264,6 +308,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     confidence: 'medium',
     // Ranked high because it converts equipment the household already owns
     // into actual protection, which beats most advice that needs new effort.
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 90,
     applies: (context) =>
       context.profile.purifier && isAtLeast(context.effectiveLevel, 'moderate'),
@@ -281,6 +327,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'medium',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 89,
     applies: (context) =>
       !context.profile.purifier &&
@@ -299,6 +347,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: true,
+    communityBenefit: false,
     priority: 80,
     applies: () => true,
   },
@@ -315,10 +365,73 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'low',
     effort: 'moderate',
     confidence: 'medium',
-    priority: 83,
+    reducesEmissions: false,
+    communityBenefit: false,
+    priority: 90,
     applies: (context) =>
       !context.profile.purifier &&
       context.profile.budget === 'low' &&
+      isAtLeast(context.effectiveLevel, 'sensitive-unhealthy'),
+  },
+  {
+    id: 'buy-room-purifier',
+    category: 'indoor',
+    title: 'Buy one purifier for the room you sleep in',
+    action:
+      'Choose a HEPA purifier rated for the floor area of your bedroom rather than a larger model for the whole home, and run it with the door shut overnight.',
+    why: 'Filtration works on the air in one enclosed space. A unit matched to a single room changes that air several times an hour, while the same money spread across a whole floor changes it too slowly to matter.',
+    personalImpact:
+      'Cuts particle levels in the room where you spend the longest unbroken stretch of time. Rated room area and a clean filter matter more than the brand.',
+    communityImpact: 'None directly.',
+    cost: 'medium',
+    effort: 'easy',
+    confidence: 'high',
+    reducesEmissions: false,
+    communityBenefit: false,
+    priority: 90,
+    applies: (context) =>
+      !context.profile.purifier &&
+      context.profile.budget === 'medium' &&
+      isAtLeast(context.effectiveLevel, 'sensitive-unhealthy'),
+  },
+  {
+    id: 'induction-instead-of-gas',
+    category: 'indoor',
+    title: 'Move cooking from gas to induction',
+    action:
+      'Replace gas burners with an induction hob, or start with a single portable induction plate for the cooking you do most often.',
+    why: 'Burning gas indoors produces nitrogen dioxide and fine particles in the room where your family eats. Induction heats the pan electrically and produces neither.',
+    personalImpact:
+      'Removes a combustion source from inside the home rather than filtering what it produces. The benefit is largest in small or poorly ventilated kitchens.',
+    communityImpact:
+      'Shifts household energy use away from burning fuel indoors, which lowers both local combustion emissions and the gas demand behind them.',
+    cost: 'high',
+    effort: 'moderate',
+    confidence: 'high',
+    reducesEmissions: true,
+    communityBenefit: true,
+    priority: 81,
+    applies: (context) =>
+      context.profile.cookingFuel === 'gas' && context.profile.budget === 'high',
+  },
+  {
+    id: 'filtered-fresh-air',
+    category: 'indoor',
+    title: 'Add filtered ventilation so you can stop choosing',
+    action:
+      'Fit a filtered air inlet, a ventilation unit with a particle filter, or a window unit that filters incoming air, so the home can take in fresh air without taking in the smog.',
+    why: 'Sealing windows keeps particles out but traps carbon dioxide, damp, and cooking fumes in. Filtered ventilation removes the trade-off between fresh air and clean air.',
+    personalImpact:
+      'Lets the home stay ventilated through a smog episode instead of alternating between stale indoor air and outdoor particles. Needs the filter changed on schedule to keep working.',
+    communityImpact: 'None directly.',
+    cost: 'high',
+    effort: 'hard',
+    confidence: 'medium',
+    reducesEmissions: false,
+    communityBenefit: false,
+    priority: 74,
+    applies: (context) =>
+      context.profile.budget === 'high' &&
       isAtLeast(context.effectiveLevel, 'sensitive-unhealthy'),
   },
 
@@ -337,6 +450,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'moderate',
     confidence: 'high',
+    reducesEmissions: true,
+    communityBenefit: true,
     priority: 78,
     applies: usesOwnVehicle,
   },
@@ -353,6 +468,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'medium',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 72,
     applies: (context) => context.profile.commuteMethod === 'car',
   },
@@ -369,6 +486,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'medium',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 82,
     applies: (context) =>
       context.profile.commuteMethod === 'walk' ||
@@ -389,6 +508,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: true,
+    communityBenefit: true,
     priority: 68,
     applies: usesOwnVehicle,
   },
@@ -407,6 +528,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'low',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 91,
     applies: (context) =>
       context.guardrails.recommendMask && context.profile.outdoorMinutes > 0,
@@ -424,6 +547,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'high',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 93,
     applies: (context) =>
       isAtLeast(context.effectiveLevel, 'sensitive-unhealthy') ||
@@ -442,6 +567,8 @@ export const CATALOGUE: readonly CatalogueItem[] = [
     cost: 'free',
     effort: 'easy',
     confidence: 'low',
+    reducesEmissions: false,
+    communityBenefit: false,
     priority: 60,
     applies: (context) =>
       context.profile.outdoorMinutes > 0 &&

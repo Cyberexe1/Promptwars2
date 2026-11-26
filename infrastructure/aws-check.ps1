@@ -8,29 +8,9 @@ $ErrorActionPreference = 'Continue'
 $env:AWS_PAGER = ''
 
 # ----- Load credentials -----------------------------------------------------
-# The .env lives in backend/ at the repo root, which is this script's parent.
-# Resolving against $PSScriptRoot alone pointed at infrastructure/backend/.env,
-# which does not exist, so every run exited here before probing anything.
-$envFile = Join-Path (Split-Path $PSScriptRoot -Parent) 'backend\.env'
-if (-not (Test-Path $envFile)) { Write-Output "not found: $envFile"; exit 1 }
-
-$values = @{}
-foreach ($line in Get-Content $envFile) {
-    if ($line -match '^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$') {
-        $values[$Matches[1]] = $Matches[2].Trim().Trim('"').Trim("'")
-    }
-}
-
-$accessKey = if ($values['AWS_ACCESS_KEY_ID']) { $values['AWS_ACCESS_KEY_ID'] } else { $values['AWS_access_key'] }
-$secretKey = if ($values['AWS_SECRET_ACCESS_KEY']) { $values['AWS_SECRET_ACCESS_KEY'] } else { $values['AWS_Secret_key'] }
-$region = if ($values['AWS_REGION']) { $values['AWS_REGION'] } else { 'us-east-1' }
-
-if (-not $accessKey -or -not $secretKey) { Write-Output 'No keys found in backend/.env'; exit 1 }
-
-$env:AWS_ACCESS_KEY_ID = $accessKey
-$env:AWS_SECRET_ACCESS_KEY = $secretKey
-$env:AWS_DEFAULT_REGION = $region
-if ($values['AWS_SESSION_TOKEN']) { $env:AWS_SESSION_TOKEN = $values['AWS_SESSION_TOKEN'] }
+# Shared loader; sets $env:AWS_* and $region. Joined with $PSScriptRoot so it
+# resolves from this script's directory, not the caller's location.
+. (Join-Path $PSScriptRoot '_aws-env.ps1')
 
 Write-Output ('region: ' + $region)
 Write-Output ''

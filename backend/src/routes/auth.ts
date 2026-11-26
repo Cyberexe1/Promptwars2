@@ -27,11 +27,29 @@ import type { AppConfig } from '../config.js';
  *
  * Two rules shape the responses here:
  *
- *   1. No user enumeration. Signup and login both return the same wording
- *      whether or not an address is registered, so this cannot be used to
- *      discover who has an account.
+ *   1. Login does not reveal whether an address is registered. Every failure
+ *      returns the same status, code, and wording, and a dummy hash is
+ *      verified when no account exists so the timing matches too.
  *   2. Nothing sensitive is logged. Email addresses and passwords never reach
  *      the logger; only the outcome does.
+ *
+ * Signup is a deliberate exception, and this used to claim otherwise.
+ * Registering a taken address returns 409 while a free one returns 201, which
+ * tells the caller whether an account exists. That cannot be closed while
+ * signup also signs the user in: whatever the response body says, the caller
+ * learns the answer from whether they end up with a session. Returning a
+ * uniform 202 and making everyone log in afterwards only moves the oracle to
+ * the login attempt, at the cost of friction for every real user.
+ *
+ * Closing it properly needs a verified email channel, so signup can answer
+ * "check your inbox" either way. That is recorded in docs/limitations.md
+ * alongside the absence of password reset, which needs the same channel.
+ *
+ * What is done instead: a taken address costs an attacker one slot in the
+ * per-account throttle, the same budget a failed login spends. Enumeration is
+ * therefore bounded at the same rate as password guessing rather than being
+ * free and unlimited. A real user still gets a clear message, because someone
+ * who cannot register and is not told why has no way forward.
  */
 const INVALID_CREDENTIALS = 'That email and password combination is not recognised.';
 
@@ -100,12 +118,26 @@ export function createAuthRouter(config: AppConfig): Router {
     const { email, password } = parsed.data;
     const store = getUserStore();
 
+    // Signup spends the same per-account budget as a failed login, so probing
+    // addresses for existing accounts is rate-limited rather than free. Also
+    // stops repeated expensive hashing against one address.
+    if (throttle.isBlocked(email)) {
+      logger.info('signup_throttled');
+      res.setHeader('Retry-After', String(throttle.retryAfterSeconds(email)));
+      throw new AppError(
+        429,
+        'TOO_MANY_ATTEMPTS',
+        'Too many attempts for this account. Please wait a few minutes and try again.',
+      );
+    }
+
     // Hash before the uniqueness check so a taken address and a free one cost
     // the same amount of time to answer.
     const passwordHash = await hashPassword(password);
     const user = await store.create(email, passwordHash);
 
     if (!user) {
+      throttle.recordFailure(email);
       logger.info('signup_rejected', { reason: 'email_in_use' });
       throw new AppError(
         409,

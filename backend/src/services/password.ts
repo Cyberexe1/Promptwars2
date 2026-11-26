@@ -26,6 +26,47 @@ const SALT_LENGTH = 16;
 /** scrypt needs roughly 128 * N * r bytes; allow headroom. */
 const MAX_MEMORY = 64 * 1024 * 1024;
 
+/**
+ * How many hashes may run at once.
+ *
+ * The parameters above need about 32 MB each, and the service runs on a
+ * 0.5 GB App Runner instance that accepts up to 50 concurrent requests. Around
+ * sixteen simultaneous hashes exhaust the memory budget, and every signup and
+ * every login pays one, including logins for addresses that do not exist. The
+ * per-IP limiter does not help, because the attempts can come from anywhere.
+ *
+ * Queueing rather than weakening: requests above this bound wait a few hundred
+ * milliseconds instead of the process running out of memory. The alternative
+ * fixes were to cut the cost parameters, which makes stolen hashes cheaper to
+ * crack, or to pay for a larger instance. Deliberately bounded well below the
+ * point of exhaustion, because the request handling around each hash needs
+ * memory too.
+ */
+const MAX_CONCURRENT_HASHES = 4;
+
+let activeHashes = 0;
+const waiting: (() => void)[] = [];
+
+async function withHashSlot<T>(work: () => Promise<T>): Promise<T> {
+  if (activeHashes >= MAX_CONCURRENT_HASHES) {
+    await new Promise<void>((resolve) => waiting.push(resolve));
+  }
+  activeHashes += 1;
+  try {
+    return await work();
+  } finally {
+    activeHashes -= 1;
+    // Hand the slot to the next waiter rather than letting everyone wake and
+    // race for it.
+    waiting.shift()?.();
+  }
+}
+
+/** Test hook: asserts the gate is not leaking slots between cases. */
+export function hashSlotsInUse(): number {
+  return activeHashes;
+}
+
 export const MIN_PASSWORD_LENGTH = 12;
 
 /**
@@ -38,10 +79,12 @@ export const MAX_PASSWORD_LENGTH = 200;
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(SALT_LENGTH);
-  const derived = await scryptAsync(password, salt, KEY_LENGTH, {
-    ...COST,
-    maxmem: MAX_MEMORY,
-  });
+  const derived = await withHashSlot(() =>
+    scryptAsync(password, salt, KEY_LENGTH, {
+      ...COST,
+      maxmem: MAX_MEMORY,
+    }),
+  );
 
   return [
     'scrypt',
@@ -86,12 +129,14 @@ export async function verifyPassword(
     const salt = Buffer.from(rawSalt!, 'base64');
     const expected = Buffer.from(rawHash!, 'base64');
 
-    const derived = await scryptAsync(password, salt, expected.length, {
-      N,
-      r,
-      p,
-      maxmem: MAX_MEMORY,
-    });
+    const derived = await withHashSlot(() =>
+      scryptAsync(password, salt, expected.length, {
+        N,
+        r,
+        p,
+        maxmem: MAX_MEMORY,
+      }),
+    );
 
     // Constant-time comparison, so response timing does not leak how much of
     // the hash matched.

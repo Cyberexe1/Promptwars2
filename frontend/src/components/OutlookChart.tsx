@@ -5,16 +5,23 @@ interface OutlookChartProps {
   outlook: Outlook;
 }
 
-/** Local hour label, e.g. "14:00". */
-function hourLabel(iso: string): string {
+/**
+ * Hour label in local time at the place being looked up, e.g. "14:00".
+ *
+ * Not the browser's timezone. Someone in London checking Delhi needs Delhi
+ * hours: a chart that labels the cleanest hour "09:00" when it is 14:30 there
+ * is not just unhelpful, it contradicts the advice text, which the backend
+ * writes using the location's own offset.
+ */
+function hourLabel(iso: string, utcOffsetSeconds: number): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return '—';
   }
-  return date.toLocaleTimeString(undefined, {
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  const shifted = new Date(date.getTime() + utcOffsetSeconds * 1000);
+  const hours = String(shifted.getUTCHours()).padStart(2, '0');
+  const minutes = String(shifted.getUTCMinutes()).padStart(2, '0');
+  return `${hours}:${minutes}`;
 }
 
 /**
@@ -50,6 +57,9 @@ export function OutlookChart({ outlook }: OutlookChartProps) {
   const ceiling = ceilingFor(values);
   const firstHour = outlook.hours[0];
   const lastHour = outlook.hours[outlook.hours.length - 1];
+  // Defaulted, so a response from an older deployment still renders rather
+  // than labelling every hour NaN.
+  const offset = outlook.utcOffsetSeconds ?? 0;
 
   return (
     <div className="outlook">
@@ -59,7 +69,7 @@ export function OutlookChart({ outlook }: OutlookChartProps) {
             <p className="outlook-fact">
               <span className="outlook-fact-label">Cleanest hour ahead</span>
               <span className="outlook-fact-value">
-                {hourLabel(outlook.cleanestHour)}
+                {hourLabel(outlook.cleanestHour, offset)}
               </span>
             </p>
           )}
@@ -67,7 +77,7 @@ export function OutlookChart({ outlook }: OutlookChartProps) {
             <p className="outlook-fact">
               <span className="outlook-fact-label">Worst hour ahead</span>
               <span className="outlook-fact-value">
-                {hourLabel(outlook.worstHour)}
+                {hourLabel(outlook.worstHour, offset)}
               </span>
             </p>
           )}
@@ -97,7 +107,7 @@ export function OutlookChart({ outlook }: OutlookChartProps) {
               className="chart-column"
               data-risk={bandForAqi(hour.usAqi)}
               {...(marker ? { 'data-marker': marker } : {})}
-              title={`${hourLabel(hour.time)} — US AQI ${hour.usAqi}`}
+              title={`${hourLabel(hour.time, offset)} — US AQI ${hour.usAqi}`}
             >
               <span
                 className="chart-bar"
@@ -111,8 +121,8 @@ export function OutlookChart({ outlook }: OutlookChartProps) {
       </div>
 
       <div className="chart-axis" aria-hidden="true">
-        <span>{firstHour ? hourLabel(firstHour.time) : ''}</span>
-        <span>{lastHour ? hourLabel(lastHour.time) : ''}</span>
+        <span>{firstHour ? hourLabel(firstHour.time, offset) : ''}</span>
+        <span>{lastHour ? hourLabel(lastHour.time, offset) : ''}</span>
       </div>
 
       <p className="chart-legend">
@@ -132,7 +142,7 @@ export function OutlookChart({ outlook }: OutlookChartProps) {
         <tbody>
           {outlook.hours.map((hour) => (
             <tr key={hour.time}>
-              <th scope="row">{hourLabel(hour.time)}</th>
+              <th scope="row">{hourLabel(hour.time, offset)}</th>
               <td>{hour.usAqi === null ? 'Not reported' : hour.usAqi}</td>
             </tr>
           ))}

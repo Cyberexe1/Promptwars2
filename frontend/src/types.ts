@@ -84,6 +84,10 @@ export interface Outlook {
   hours: HourlyReading[];
   cleanestHour: string | null;
   worstHour: string | null;
+  /** Seconds to add to UTC for local time at the looked-up place. */
+  utcOffsetSeconds: number;
+  /** AQI spread across the advice window, or null when none is forecast. */
+  windowSpread: number | null;
 }
 
 export interface AirQualityResponse {
@@ -115,6 +119,8 @@ export interface Recommendation {
   cost: CostLevel;
   effort: EffortLevel;
   confidence: ConfidenceLevel;
+  reducesEmissions: boolean;
+  communityBenefit: boolean;
 }
 
 export interface RecommendationsResponse {

@@ -1,6 +1,7 @@
 import { getCurrentAirQuality } from './airQuality.js';
 import { isBedrockEnabled, personalisePlan } from './bedrock.js';
 import { buildRulesPlan, DISCLAIMER, toRecommendation } from '../domain/recommend.js';
+import { describeTiming } from '../domain/outlook.js';
 import { deriveGuardrails, type SafetyGuardrails } from '../domain/risk.js';
 import type { ModelPlan } from '../schemas.js';
 import type { CatalogueItem } from '../domain/catalogue.js';
@@ -123,6 +124,7 @@ export async function createPlan(
     location,
     profile,
     current: reading.current,
+    ...(reading.outlook ? { outlook: reading.outlook } : {}),
   });
   const guardrails = deriveGuardrails(rules.risk.effectiveLevel);
 
@@ -136,6 +138,13 @@ export async function createPlan(
       escalatedForSensitivity: rules.risk.escalatedForSensitivity,
       guardrails,
       selected: rules.selected,
+      // The forecast shape is the one piece of context that needs
+      // interpreting rather than looking up, so the model is told about it.
+      // It still cannot change which advice appears or what time is named:
+      // the retimed wording is already in `selected`.
+      ...(describeTiming(reading.outlook)
+        ? { timing: describeTiming(reading.outlook)! }
+        : {}),
     });
   }
 

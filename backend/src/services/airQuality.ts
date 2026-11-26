@@ -44,6 +44,10 @@ const airQualityResponseSchema = z.object({
       us_aqi: z.array(measurement).optional(),
     })
     .optional(),
+  // Supplied because the request asks for timezone=auto. Optional and
+  // defaulted so a provider that omits it yields UTC labelling rather than an
+  // error: a slightly wrong hour label is a smaller failure than no reading.
+  utc_offset_seconds: z.number().optional(),
 });
 
 /** Readings older than this are flagged to the user as stale. */
@@ -109,6 +113,10 @@ export async function getCurrentAirQuality(
   url.searchParams.set('hourly', 'us_aqi');
   url.searchParams.set('forecast_days', '2');
   url.searchParams.set('timeformat', 'unixtime');
+  // Yields utc_offset_seconds for the coordinate, so "the cleanest hour" can
+  // be named in local time at the place being looked up. Timestamps stay as
+  // UTC epoch seconds under timeformat=unixtime.
+  url.searchParams.set('timezone', 'auto');
 
   const raw = await fetchJson(url.toString(), {
     timeoutMs: config.upstreamTimeoutMs,
@@ -143,7 +151,13 @@ export async function getCurrentAirQuality(
 
   const hourly = parsed.data.hourly;
   const outlook = hourly
-    ? buildOutlook({ time: hourly.time, usAqi: hourly.us_aqi ?? [] })
+    ? buildOutlook({
+        time: hourly.time,
+        usAqi: hourly.us_aqi ?? [],
+        ...(parsed.data.utc_offset_seconds !== undefined
+          ? { utcOffsetSeconds: parsed.data.utc_offset_seconds }
+          : {}),
+      })
     : undefined;
 
   if (config.aqiCacheTtlSeconds > 0) {
