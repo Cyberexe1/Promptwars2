@@ -26,6 +26,7 @@ reads AWS credentials from `backend/.env` through `_aws-env.ps1`.
 | Script | Checks |
 |---|---|
 | `verify-account-flow.ps1` | Sign-up, session, plan, and sign-in through the site origin. The closest thing to a browser test that curl can do. |
+| `verify-plan-behaviour.ps1` | What comes out of the plumbing: an emission-reducing action in a plan for a household with no vehicle, three different plans across budgets, timing advice that names an hour or withdraws itself, and the location's UTC offset on the forecast. |
 | `audit-live.ps1` | Headers, compression, TLS, rate-limit headers, and that `/api` is proxied. |
 | `smoke-auth-live.ps1` | The authentication flow, end to end. |
 | `verify-bedrock.ps1` | That a plan came from the model rather than the rules fallback. |

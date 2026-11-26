@@ -82,11 +82,14 @@ the API's own 403 and 404 responses into 200s carrying HTML once the API joined
 the distribution. The proper fix is a CloudFront Function, which the deploying
 identity has no permission to create. See `infrastructure/README.md`.
 
-**The deployed API is one commit behind the repository.** The live container
-predates the catalogue and forecast work, so plans from the live site carry no
-`reducesEmissions` flag and still use the fixed "early afternoon" timing text.
-Updating it needs a container build, which needs either a running Docker daemon
-or a run of the `deploy-backend` workflow.
+**The infrastructure changes are in the templates but not applied to the live backend stack.**
+The running container is current, but the CloudFormation changes made in the
+same period were not deployed: the narrower instance role (no `UpdateItem`,
+`DeleteItem` or `Query`), the Bedrock permission scoped to one model, and the
+permissions boundary on the roles. Applying them needs the boundary policy to
+exist first and IAM rights the deploying user does not have. The live service
+therefore still runs with the broader permissions it was created with. The
+frontend stack, which needed no IAM change, was redeployed.
 
 ## Accuracy
 
@@ -117,7 +120,7 @@ hour can be wrong in the ordinary way forecasts are wrong.
 
 ## Testing boundaries
 
-537 tests pass and none touch the network: upstream services are mocked in the backend, `fetch` is stubbed in the frontend, and the Bedrock client is never constructed.
+543 tests pass and none touch the network: upstream services are mocked in the backend, `fetch` is stubbed in the frontend, and the Bedrock client is never constructed.
 
 That is also the limit. These tests prove the code behaves as written against fixtures. They do not prove that Open-Meteo's response shape is still what the schema expects, that Bedrock returns usable prose, or that CloudFront serves the headers the template specifies. Scripts in [`infrastructure/`](../infrastructure/) check those against the deployed stack instead: `audit-live.ps1` asserts health, live readings, signup, CORS rejection, SPA fallback, and security headers; `verify-bedrock.ps1` confirms a plan came back from the model rather than the rules fallback; `verify-throttle.ps1` drives the login throttle to 429. They have been run against the live deployment and pass.
 

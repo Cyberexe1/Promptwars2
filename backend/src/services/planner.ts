@@ -34,19 +34,32 @@ export function violatesOutdoorConstraint(
   return OUTDOOR_EXERTION_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+/**
+ * Decides whether the model's text for one field is used.
+ *
+ * `accepted` means the model supplied text and it passed the safety check. It
+ * does not mean the text differs from the catalogue. A model told to keep the
+ * meaning of reviewed advice will often return it unchanged, and that is the
+ * model's output being used, not the rules engine's.
+ */
+function acceptModelText(
+  candidate: string | undefined,
+  fallback: string,
+  guardrails: SafetyGuardrails,
+): { text: string; accepted: boolean } {
+  if (!candidate || violatesOutdoorConstraint(candidate, guardrails)) {
+    return { text: fallback, accepted: false };
+  }
+  return { text: candidate, accepted: true };
+}
+
 /** Uses the model's text only when it is present and passes the safety check. */
 function chooseText(
   candidate: string | undefined,
   fallback: string,
   guardrails: SafetyGuardrails,
 ): string {
-  if (!candidate) {
-    return fallback;
-  }
-  if (violatesOutdoorConstraint(candidate, guardrails)) {
-    return fallback;
-  }
-  return candidate;
+  return acceptModelText(candidate, fallback, guardrails).text;
 }
 
 /**
@@ -74,20 +87,28 @@ export function mergePlan(
       .map((entry) => [entry.id, entry] as const),
   );
 
-  // Counts fields the model actually contributed, not entries it echoed back.
-  // A response can name every id correctly and still have every field rejected
-  // by chooseText, in which case the user reads catalogue prose and the
+  // Counts fields whose model text passed the safety check, not entries the
+  // model merely named. A response can list every id correctly and still have
+  // every field rejected, in which case the user reads catalogue prose and the
   // provenance must say so.
+  //
+  // What it must not count is "text that differs from the catalogue". An
+  // earlier version did, on the reasoning that unchanged text means the rules
+  // engine wrote it. But the model is instructed to keep the meaning of
+  // reviewed advice, so it often returns the wording verbatim, and that
+  // version labelled those plans `rules` and, because the personalised summary
+  // is only used when this is true, threw the summary away too. Caught on the
+  // live site, where seven of eight plans had silently stopped using Bedrock.
   let acceptedFields = 0;
   const take = (
     candidate: string | undefined,
     fallback: string,
   ): string => {
-    const chosen = chooseText(candidate, fallback, guardrails);
-    if (chosen !== fallback) {
+    const { text, accepted } = acceptModelText(candidate, fallback, guardrails);
+    if (accepted) {
       acceptedFields += 1;
     }
-    return chosen;
+    return text;
   };
 
   const recommendations = selected.map((item) => {

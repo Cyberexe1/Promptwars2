@@ -137,7 +137,8 @@ Verified against the running deployment:
 | API health | `{"status":"ok"}` |
 | Live reading | US AQI 181, banded "Unhealthy", 24-hour outlook returned |
 | Account creation | HTTP 201, session cookie set |
-| Authenticated plan | 6 recommendations, escalated unhealthy → very unhealthy for a sensitive household |
+| Authenticated plan | 6 recommendations, escalated unhealthy → very unhealthy for a sensitive household, wording from Bedrock in 8 of 8 trial plans across four household types |
+| Plan content | Every plan includes an action that cuts pollution at source; the three budget levels give three different plans; the summary reflects the 12-hour forecast |
 | Anonymous plan request | 401, as intended |
 | CORS from CloudFront | Allowed, echoing that exact origin |
 | CORS from another origin | 403 |
@@ -152,7 +153,7 @@ Verified against the running deployment:
 
 ## Current Status
 
-**All three phases are complete and deployed.** 537 tests pass with enforced coverage floors, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the stack is live on AWS. What remains needs a human: a manual screen-reader pass, real-device testing, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
+**All three phases are complete and deployed.** 543 tests pass with enforced coverage floors, lint and type checks are clean, both projects build, five CloudFormation templates validate, and the stack is live on AWS. What remains needs a human: a manual screen-reader pass, real-device testing, and the demo video. Those are listed explicitly in [Phase 3](#phase-3-product-polish-validation-and-submission--code-complete) and [`docs/limitations.md`](docs/limitations.md).
 
 | Area | State |
 |---|---|
@@ -162,7 +163,7 @@ Verified against the running deployment:
 | Saved plans | Built, device-local with user-controlled deletion |
 | Community checklist | Built, household and health details stripped |
 | React frontend | 254 tests passing, 94% statement coverage |
-| Node.js API | 283 tests passing, 85% statement coverage |
+| Node.js API | 289 tests passing, 85% statement coverage |
 | 24-hour outlook | Names the cleanest and worst hours ahead, so "shift your outdoor time" is actionable |
 | Live air-quality data | Working against Open-Meteo, no API key required |
 | Risk and recommendation rules | Complete, verified over 1,000+ household and band combinations |
@@ -564,7 +565,7 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 │   │   ├── utils/            # Errors and logging
 │   │   ├── app.ts            # Express app, exported for tests
 │   │   └── server.ts         # Listener and shutdown
-│   ├── tests/                # 283 Vitest tests, including the frontend/backend contract guard
+│   ├── tests/                # 289 Vitest tests, including the frontend/backend contract guard
 │   ├── Dockerfile            # Multi-stage, non-root runtime
 │   └── .env.example
 ├── frontend/                 # React application
@@ -605,6 +606,6 @@ One finding worth your attention: AWS moved **App Runner into maintenance mode o
 - [x] The README explains the vertical, approach, logic, operation, and assumptions.
 - [x] Setup, test, and deployment instructions are verified. Every local command was run, and the deployment scripts have been applied to a live stack
 - [x] No credentials, tokens, personal information, or `.env` files are committed. Only `.env.example`; CI also runs Gitleaks over full history
-- [x] The application includes tests and accessibility checks. 537 tests, including axe on every route and 42 computed contrast assertions
+- [x] The application includes tests and accessibility checks. 543 tests, including axe on every route and 42 computed contrast assertions
 - [ ] The video is unlisted on YouTube or shared through a publicly accessible Drive link.
 - [ ] The public GitHub repository URL is submitted within the allowed three attempts.

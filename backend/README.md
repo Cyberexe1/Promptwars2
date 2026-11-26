@@ -132,7 +132,7 @@ When the provider returns neither `us_aqi` nor `pm2_5`, the service does not gue
 
 ## Tests
 
-283 tests, no network access. Both upstream services are mocked and the Bedrock client is never constructed.
+289 tests, no network access. Both upstream services are mocked and the Bedrock client is never constructed.
 
 | File | Covers |
 |---|---|

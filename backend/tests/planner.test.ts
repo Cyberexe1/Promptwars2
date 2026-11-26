@@ -103,6 +103,77 @@ describe('mergePlan', () => {
     expect(windows?.action).toBe('Shut the windows on the road-facing side first.');
   });
 
+  it('counts the model as used when it returns the reviewed wording unchanged', () => {
+    // The regression this guards. The model is told to keep the meaning of
+    // reviewed advice, so verbatim output is normal, and it is still the
+    // model's output. Treating "same as the catalogue" as "not the model"
+    // labelled live plans `rules` and discarded the personalised summary.
+    const echoed: ModelPlan = {
+      summary: 'A summary written for this household.',
+      recommendations: selected.map((item) => ({
+        id: item.id,
+        action: item.action,
+        why: item.why,
+        personalImpact: item.personalImpact,
+        communityImpact: item.communityImpact,
+      })),
+    };
+
+    const result = mergePlan(selected, echoed, SMOGGY_AIR);
+
+    expect(result.usedModel).toBe(true);
+    expect(result.recommendations.map((item) => item.action)).toEqual(
+      selected.map((item) => item.action),
+    );
+  });
+
+  it('does not count the model as used when every field fails the safety check', () => {
+    // The case the provenance fix was written for. Naming the right ids is not
+    // the same as contributing wording: if every field is rejected, the user
+    // reads catalogue prose and the label has to say so.
+    const unsafe = 'Go for a run this morning.';
+    const rejected: ModelPlan = {
+      summary: 'Summary.',
+      recommendations: selected.map((item) => ({
+        id: item.id,
+        action: unsafe,
+        why: unsafe,
+        personalImpact: unsafe,
+        communityImpact: unsafe,
+      })),
+    };
+
+    const result = mergePlan(selected, rejected, SMOGGY_AIR);
+
+    expect(result.usedModel).toBe(false);
+    expect(result.recommendations.map((item) => item.action)).toEqual(
+      selected.map((item) => item.action),
+    );
+  });
+
+  it('counts the model as used when only some fields are accepted', () => {
+    const partial: ModelPlan = {
+      summary: 'Summary.',
+      recommendations: [
+        {
+          id: 'keep-windows-closed',
+          action: 'Go for a run this morning.',
+          why: 'Reworded reason that is safe.',
+          personalImpact: 'Go for a run this morning.',
+          communityImpact: 'Go for a run this morning.',
+        },
+      ],
+    };
+
+    const result = mergePlan(selected, partial, SMOGGY_AIR);
+    const windows = result.recommendations.find((item) => item.id === 'keep-windows-closed')!;
+
+    expect(result.usedModel).toBe(true);
+    expect(windows.why).toBe('Reworded reason that is safe.');
+    // The unsafe fields fell back to reviewed text individually.
+    expect(windows.action).toBe(findCatalogueItem('keep-windows-closed')!.action);
+  });
+
   it('discards model entries whose ids were not selected', () => {
     const plan: ModelPlan = {
       summary: 'Summary.',
