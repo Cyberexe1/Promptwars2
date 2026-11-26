@@ -103,6 +103,24 @@ The stack generates `SESSION_SECRET` with `GenerateSecretString` and nothing
 ever overwrites it. Write access to that secret would let the holder set a
 known signing key and forge a session cookie for any user.
 
+### One permission worth adding
+
+`cloudfront:CreateFunction`, `GetFunction`, `UpdateFunction`, `DeleteFunction`,
+`PublishFunction` and `ListFunctions` on `function/smogwise-*`.
+
+Client-side routing currently works by publishing a copy of `index.html` at
+each route path (`/login`, `/privacy`, `/dashboard`), because the distribution
+can no longer map 403 to the app shell: those custom error responses apply to
+every cache behaviour, and once the API joined the distribution they rewrote
+the API's own 403 and 404 responses into 200s carrying HTML. The backend still
+refused those requests, but the browser was told they had succeeded.
+
+A CloudFront Function on viewer-request would rewrite extensionless, non-`/api`
+paths to `/index.html` before the request reaches an origin, which handles any
+route without a published copy and restores the app's own not-found page for a
+mistyped URL. It was written, and reverted, because the deploying identity
+cannot create one.
+
 ### Everything else
 
 Scoped to `smogwise-*` resources wherever AWS supports resource-level

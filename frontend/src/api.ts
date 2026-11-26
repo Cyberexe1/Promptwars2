@@ -12,12 +12,17 @@ import type {
  * The base URL is injected at build time. There are no credentials or API keys
  * in the browser: every upstream key stays on the server.
  *
- * An empty `VITE_API_URL` is meaningful, not missing: it makes every call
- * same-origin, which is what the deployed build uses now that CloudFront
- * proxies /api/* to App Runner. That matters because the session cookie is
- * `SameSite=Lax`, and a browser will not attach it to a cross-site fetch, so
- * calling the App Runner host directly left a signed-in user looking signed
- * out. `??` rather than `||` for exactly that reason.
+ * The deployed build sets `VITE_API_URL=/`, which the trailing-slash strip
+ * below turns into an empty base, making every call same-origin. CloudFront
+ * proxies /api/* to App Runner, so the page and the API are one site. That
+ * matters because the session cookie is `SameSite=Lax` and a browser will not
+ * attach it to a cross-site fetch: when the bundle called the App Runner host
+ * directly, the CSRF cookie was withheld and signup failed with a 403 before
+ * it reached any account logic.
+ *
+ * A slash rather than an empty string because PowerShell removes an
+ * environment variable when you assign `''` to it, so `VITE_API_URL=''` left
+ * Vite seeing nothing and falling back to localhost in a production bundle.
  */
 const API_BASE_URL = (
   import.meta.env.VITE_API_URL ?? 'http://localhost:3000'

@@ -208,15 +208,17 @@ $frontendDir = Join-Path $repoRoot 'frontend'
 if (-not $DryRun) {
     Push-Location $frontendDir
     try {
-        # Empty on purpose, so every call is same-origin and CloudFront routes
-        # /api/* to App Runner through the behaviour added in step 4.
+        # A slash, so api.ts strips it to an empty base and every call is
+        # same-origin, routed by the CloudFront /api behaviour from step 4.
+        # Not '' : PowerShell deletes an environment variable when you assign
+        # an empty string, which left Vite falling back to localhost.
         #
         # The bundle used to be built with the App Runner URL, which made the
         # page and the API different sites. A browser will not attach the
-        # SameSite=Lax session cookie across sites, so sign-in appeared to
-        # succeed and the dashboard then reported no session. curl ignores
-        # SameSite, which is why the live smoke tests never caught it.
-        $env:VITE_API_URL = ''
+        # SameSite=Lax session cookie across sites, so the CSRF cookie was
+        # withheld and signup failed with 403. curl ignores SameSite, which is
+        # why the live smoke tests never caught it.
+        $env:VITE_API_URL = '/'
         npm ci
         if ($LASTEXITCODE -ne 0) { Fail 'npm ci failed' }
         npm run build
@@ -252,7 +254,30 @@ Invoke-Checked 'upload index.html' {
         --content-type 'text/html; charset=utf-8' --no-progress
 }
 Invoke-Checked 'remove orphaned files' {
-    aws s3 sync (Join-Path $frontendDir 'dist') "s3://$bucket" --delete --no-progress
+    aws s3 sync (Join-Path $frontendDir 'dist') "s3://$bucket" --delete `
+        --exclude 'login' --exclude 'privacy' --exclude 'dashboard' --no-progress
+}
+
+# Client-side routes, published as copies of the app shell.
+#
+# The distribution no longer maps 403 to /index.html. Those custom error
+# responses applied to every cache behaviour, so once the API joined the
+# distribution they rewrote its 403 and 404 responses into 200s carrying HTML:
+# a refused request looked to the browser like a successful one. Publishing a
+# shell per route keeps deep links and refreshes working without touching
+# status codes.
+#
+# After the --delete sync above, and excluded from it, or it would remove
+# these on every deployment because they are not in dist/.
+#
+# Keep in step with the routes in frontend/src/App.tsx. A route missing here
+# still works through in-app navigation; only a direct load or refresh fails.
+foreach ($spaRoute in @('login', 'privacy', 'dashboard')) {
+    Invoke-Checked "publish the shell for /$spaRoute" {
+        aws s3 cp (Join-Path $frontendDir 'dist/index.html') "s3://$bucket/$spaRoute" `
+            --cache-control 'no-cache,no-store,must-revalidate' `
+            --content-type 'text/html; charset=utf-8' --no-progress
+    }
 }
 
 # ---------------------------------------------------------------------------
@@ -261,7 +286,7 @@ Invoke-Checked 'remove orphaned files' {
 Step '6/6 Invalidate the cache and verify'
 if (-not $DryRun) {
     $invalidation = aws cloudfront create-invalidation --distribution-id $distributionId `
-        --paths '/' '/index.html' --query 'Invalidation.Id' --output text
+        --paths '/*' --query 'Invalidation.Id' --output text
     aws cloudfront wait invalidation-completed --distribution-id $distributionId --id $invalidation
     Info 'invalidation' "$invalidation complete"
 

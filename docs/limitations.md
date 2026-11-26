@@ -64,17 +64,20 @@ gap explicitly so it cannot be quietly forgotten.
 
 **`MinSize: 1` on App Runner.** Avoids cold starts, bills while idle. The dominant running cost.
 
-**Browser sign-in has not been confirmed since the routing change.** The
-session cookie is `SameSite=Lax`, and until recently the page was on CloudFront
-while the API was on App Runner. Those are different sites, so a browser would
-not attach the cookie to the page's `fetch` and a signed-in user appeared
-signed out. `05-frontend.yaml` now proxies `/api/*` through the distribution
-and the bundle is built with an empty `VITE_API_URL`, which makes every call
-same-origin. The deployed stack still needs a redeploy for that to take effect,
-and the check has to be done in a real browser: `curl` ignores SameSite, so the
-scripted smoke tests pass either way. Deliberately not fixed by relaxing the
-cookie to `SameSite=None`, which would discard a genuine CSRF defence to work
-around a deployment topology.
+**A mistyped URL shows an S3 error, not the app's not-found page.** Client-side
+routes are served by publishing a copy of `index.html` at each route path, so
+only the routes on that list survive a direct load or a refresh. The
+distribution used to map any 403 to the app shell, which covered every path,
+but those custom error responses apply to every cache behaviour and so rewrote
+the API's own 403 and 404 responses into 200s carrying HTML once the API joined
+the distribution. The proper fix is a CloudFront Function, which the deploying
+identity has no permission to create. See `infrastructure/README.md`.
+
+**The deployed API is one commit behind the repository.** The live container
+predates the catalogue and forecast work, so plans from the live site carry no
+`reducesEmissions` flag and still use the fixed "early afternoon" timing text.
+Updating it needs a container build, which needs either a running Docker daemon
+or a run of the `deploy-backend` workflow.
 
 ## Accuracy
 

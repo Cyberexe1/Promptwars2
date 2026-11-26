@@ -237,23 +237,30 @@ Resources:
             CachePolicyId: 4135ea2d-6df8-44a3-9df3-4b5a84be39ad
             ResponseHeadersPolicyId: !Ref SecurityHeadersPolicy
 
-        # Single-page application fallback: client-side routes such as
-        # /dashboard are not objects in S3, so S3 answers 403 and CloudFront
-        # serves the app shell instead. React Router then renders the route.
+        # No CustomErrorResponses, deliberately.
         #
-        # Trade-off: this also masks a genuinely missing asset as a 200. It is
-        # acceptable here because asset names are content-hashed, so a missing
-        # asset means a stale deployment rather than a broken path. The short
-        # cache TTL keeps a bad state from sticking.
-        CustomErrorResponses:
-          - ErrorCode: 403
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-            ErrorCachingMinTTL: 10
-          - ErrorCode: 404
-            ResponseCode: 200
-            ResponsePagePath: /index.html
-            ErrorCachingMinTTL: 10
+        # They used to map 403 and 404 to /index.html with a 200, which worked
+        # while S3 was the only origin: a client-side route such as /dashboard
+        # is not an object, S3 answered 403, and the app shell was served
+        # instead.
+        #
+        # That broke the moment the API joined this distribution, because
+        # custom error responses apply to every behaviour and cannot be scoped
+        # to one. Verified against the live stack: a POST with no CSRF token
+        # returned 403 directly from App Runner and 200 carrying HTML through
+        # CloudFront. The backend still refused the request, so nothing
+        # unauthorised happened, but the browser was told the call succeeded
+        # and then had HTML to parse as JSON.
+        #
+        # Client-side routes are handled instead by publishing a copy of
+        # index.html at each route path, which `deploy.ps1` does from one list.
+        # The cost is that a path nobody published, such as a typo, returns the
+        # S3 error rather than the app's own not-found page.
+        #
+        # The better fix is a CloudFront Function on viewer-request that
+        # rewrites extensionless, non-/api paths to /index.html. It was written
+        # and reverted because the deploying identity has no
+        # cloudfront:CreateFunction permission. See infrastructure/README.md.
 
 Outputs:
   BucketName:
